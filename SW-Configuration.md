@@ -17,9 +17,24 @@ The defaults are located in:
 ## WiFi (setup access point)
 WiFi credentials are not compiled into the firmware. They are entered on a setup page served by the device itself ([wifi_config.h](src/wifi_config.h), based on [WiFiManager](https://github.com/tzapu/WiFiManager)):
 
-1. When no WiFi credentials are saved, the device opens the access point **`MHI-AC-Ctrl-Setup`** (password: `SETUP_AP_PASSWORD`, default `mhi-ac-setup`).
+1. When no WiFi credentials are saved, the device opens the access point **`<hostname>-Setup`**, protected by the device password (see below).
 2. Connect to it with a phone or laptop. The setup page opens automatically (otherwise browse to http://192.168.4.1/).
 3. Choose **Configure WiFi**, pick your network, enter the password and, optionally, the MQTT broker settings, then press **Save**.
+4. On the home network the same pages are served at `http://<device IP>/` and require a login: user **`admin`**, password = device password.
+
+### Device password
+One password protects the setup access point, the settings login and OTA updates.
+- Default: a random 10-character password generated on first boot, stored in flash and printed in the serial log at every boot (`Device password (...)`).
+- Set it at build time with `DEVICE_PASSWORD` (min. 8 characters), or change it on the settings page (**Setup** -> *New device password*). The device restarts after a change.
+- `OTA_PASSWORD` can still be set to use a different password for OTA only.
+
+Firmware upload via the web page (`/update`) is disabled; use OTA (`d1_mini_ota` environment with `upload_flags = --auth=<device password>`) or USB.
+
+### Hostname
+The hostname is the WiFi / OTA / MQTT client name and the root of all MQTT topics. Change it on the settings page (**Setup** -> *Hostname*, letters, digits and `-`); the device restarts. A unique hostname is required when multiple ACs are used, e.g. `Living-Room-AC`. `HOSTNAME` sets the default.
+
+### AC status page
+**AC status** in the menu (`/status`) shows the latest value of every status and operating data topic, the AC connection state and device information. It refreshes every 5 s and works without an MQTT broker.
 
 The credentials are stored in flash and survive reboots and firmware updates.
 When the WiFi connection is lost for `SETUP_AP_AFTER_OFFLINE_MIN` minutes (default 5), the setup access point is opened again.
@@ -27,11 +42,10 @@ While it is open, the saved network is retried every minute (only when nobody is
 
 Build-time options (e.g. in `secrets.ini`, see [secrets.ini.example](secrets.ini.example)):
 ```cpp
-#define HOSTNAME "MHI-AC-Ctrl"                  // also used for the setup AP name: HOSTNAME "-Setup"
-#define SETUP_AP_PASSWORD "mhi-ac-setup"        // min. 8 characters, "" for an open access point
+#define HOSTNAME "MHI-AC-Ctrl"                  // default hostname; setup AP name is "<hostname>-Setup"
+#define DEVICE_PASSWORD ""                      // "" = random password on first boot, otherwise min. 8 characters
 #define SETUP_AP_AFTER_OFFLINE_MIN 5            // minutes offline before the setup AP is opened
 ```
-Changing the hostname is required when multiple ACs should be supported. E.g. replace `"MHI-AC-Ctrl"` by `"Living-Room-MHI-AC-Ctrl"`
 
 ## MQTT ([support.h](src/support.h))
 The program uses the MQTT client library [PubSubClient3](https://github.com/hmueller01/pubsubclient3) from Holger Müller (hmueller01), originally written by Nick O'Leary (knolleary).
@@ -62,13 +76,10 @@ While the broker is unreachable, a connection attempt is made every `MQTT_RETRY_
 The following sections show the configuration for the MQTT paths.
 
 ### MQTT status
-The topic level for status information from the AC consists of the `MQTT_PREFIX` and the function name separated by a slash, e.g. `MHI-AC-Ctrl/Power`.
-For writes the topic level consists of the `MQTT_PREFIX`, the prefix for set commands (`MQTT_SET_PREFIX`) and the function name, each separated by a slash, e.g. `MHI-AC-Ctrl/set/Power`.
-You can change `MQTT_PREFIX` and `MQTT_SET_PREFIX`, default is
-```cpp
-#define MQTT_PREFIX HOSTNAME "/"           // basic prefix used for publishing AC data
-#define MQTT_SET_PREFIX MQTT_PREFIX "set/" // prefix for subscribing set commands
-```
+The topic level for status information from the AC consists of the hostname and the function name separated by a slash, e.g. `MHI-AC-Ctrl/Power`.
+For writes the topic level consists of the hostname, `set` and the function name, each separated by a slash, e.g. `MHI-AC-Ctrl/set/Power`.
+Operating data is published below `<hostname>/OpData/`, operating data of the last error below `<hostname>/ErrOpData/`.
+The hostname is set on the settings page (see [Hostname](#hostname)).
 Please pay attention to the case sensitivity.
 
 The following status data is available (prefix is not listed).
@@ -78,7 +89,7 @@ When writing data, the retain flag shall be `false`!
 topic|r/w|value|comment
 -----|---|-----|------
 Power|r/w|"On", "Off"|
-Mode|r/w|"Auto", "Dry", "Cool", "Fan", "Heat" and "Off"|"Off" is only supported when option [POWERON_WHEN_CHANGING_MODE](#behaviour-when-changing-ac-mode-supporth) is selected.
+Mode|r/w|"Auto", "Dry", "Cool", "Fan", "Heat" and "Off"|"Off" is only supported when option [POWERON_WHEN_CHANGING_MODE](#behaviour-when-changing-ac-mode-supporth) is enabled (default).
 Tsetpoint|r/w|18 ... 30|Target room temperature (float) in °C, resolution is 0.5°C
 Fan|r/w|1,2,3,4,"Auto"|Fan level
 Vanes|r/w|1,2,3,4,"Swing","?"|Vanes up/down position <sup>1</sup>
@@ -160,11 +171,11 @@ Value |meaning
 
 ## OTA Settings ([support.h](src/support.h))
 OTA (Over the Air) update is the process of loading the firmware to ESP module using Wi-Fi connection rather than a serial port.
-The OTA hostname can be adapted, per default it is the hostname used by WiFi.
+The OTA hostname is the hostname. OTA always requires a password: the device password, unless `OTA_PASSWORD` is set.
 ```cpp
-#define OTA_HOSTNAME HOSTNAME     // default for the OTA_HOSTNAME is the HOSTNAME
-#define OTA_PASSWORD ""           // Enter an OTA password if required
+#define OTA_PASSWORD ""           // "" = use the device password
 ```
+With PlatformIO pass it via `upload_flags = --auth=<password>` in the `d1_mini_ota` environment (see [secrets.ini.example](secrets.ini.example)).
 
 ## External Temperature Sensor Settings ([support.h](src/support.h))
 When an external temperature sensor is connected, you can configure the pin where DQ of the the DS18x20 is connected, default is Pin 4 (D2)
@@ -210,10 +221,17 @@ The MQTT topic `Troom` will show (like before) the `Troom` received by the AC (i
 For example: when setpoint is 20.5. When `Troom` 19.5 is received (from MQTT or DS18x20), `Troom` sent to the AC will be 20.0. Topic `Troom` will also show 20.0.
 
 ## Behaviour when changing AC mode ([support.h](src/support.h))
-Per default the power on/off state is not changed, when you change the AC mode (e.g. heat, dry, cold etc.).
-But when you uncomment the following line, then the AC is switched on, once you change the AC mode and switched off if you publish `Off` to `Mode` (instead of `Power`). This beahviour is requested for use with [Home Assistant](https://www.home-assistant.io/).
+Per default (in this fork) the AC is switched on once you change the AC mode, switched off if you publish `Off` to `Mode`, and `Mode` reports `Off` while the AC is off. This behaviour is needed for [Home Assistant](https://www.home-assistant.io/). `set/Power` keeps working as well.
+To keep the power state unchanged when the mode is changed (original behaviour), disable it:
 ```cpp
-//#define POWERON_WHEN_CHANGING_MODE true           // uncomment it to switch on the AC when the mode (heat, cool, dry etc.) is changed
+#define POWERON_WHEN_CHANGING_MODE 0
+```
+
+## Home Assistant discovery ([support.h](src/support.h))
+On every MQTT (re)connect the device publishes retained [MQTT discovery](https://www.home-assistant.io/integrations/mqtt/#mqtt-discovery) configs below `homeassistant/`: a climate entity (modes off/auto/cool/dry/fan_only/heat, target temperature 18-30 °C in 0.5 steps, room temperature, fan 1-4/Auto, vanes 1-4/Swing) and sensors for outdoor temperature, energy (kWh), error code and WiFi signal. The device is available while the `connected` topic is `1`.
+```cpp
+#define HA_DISCOVERY 1                    // 0 to disable
+#define HA_DISCOVERY_PREFIX "homeassistant"
 ```
 
 ## Using extended frame size for enabling 3D auto and vanes L/R ([support.h](src/support.h))
@@ -316,16 +334,11 @@ With the following parameter you can change this minimum interval of 5 seconds.
 
 This jitter can also be avoided by using the `TROOM_FILTER_LIMIT` as descibed above. But this filter is also used if the temperature is provided by an external temperature sensor or a connected DS18B20. With above it will be also possible to see smaller changes.
 
-## Not switching off AC when MQTT connections fails ([MHI-AC-Ctrl.h](src/MHI-AC-Ctrl.h))
-Default the module stops communicating with the AC when the MQTT connection get disconnected. After 120 sec the AC will power off because of [this](https://github.com/absalom-muc/MHI-AC-Ctrl/blob/master/Troubleshooting.md#fire-ac-switches-power-off-sometimes).
-When using a DS18x20 as room temperature sensor, this can be unwanted behaviour. Also at night or when not at home when this happens, can be unwanted behaviour.
-This behaviour can be changed by changing the following line:
+## Not switching off AC when MQTT connections fails ([support.h](src/support.h))
+In the original firmware the module stops communicating with the AC when the MQTT connection gets disconnected. After 120 sec the AC will power off because of [this](https://github.com/absalom-muc/MHI-AC-Ctrl/blob/master/Troubleshooting.md#fire-ac-switches-power-off-sometimes).
+In this fork communication with the AC continues by default (also the status page and LED keep working without a broker). To get the original behaviour back:
 ```cpp
-//#define CONTINUE_WITHOUT_MQTT true
-```
-to
-```cpp
-#define CONTINUE_WITHOUT_MQTT true
+#define CONTINUE_WITHOUT_MQTT 0
 ```
 
 Warning: be aware that there might be some safety implication and that the deactivation of this feature is on your own risk.
@@ -359,7 +372,7 @@ Build with `-DSTATUS_LED_DEMO` to cycle through all states (4 s each) for checki
 
 ## MHI-AC-Ctrl partitioning
 MHI-AC-Ctrl-core implements the core functions (SPI read/write, communication with the wrapper).
-MQTT, OTA and DS18x20 stuff is located in `support.h` and `support.cpp`, WiFi setup and the persisted MQTT settings in `wifi_config.h` and `wifi_config.cpp`, the status LED in `status_led.h` and `status_led.cpp`. The styling of the settings pages is in `web_theme.h`.
+MQTT (incl. Home Assistant discovery), OTA and DS18x20 stuff is located in `support.h` and `support.cpp`, WiFi setup, login and the persisted settings (MQTT, hostname, device password) in `wifi_config.h` and `wifi_config.cpp`, the AC status page in `web_status.h` and `web_status.cpp`, the status LED in `status_led.h` and `status_led.cpp`. The styling of the web pages is in `web_theme.h`.
 `main.cpp` and `MHI-AC-Ctrl.h` contain the wrapper for `MHI-AC-Ctrl-core.cpp` and `support.cpp`.
 
 ### `MHI-AC-Ctrl-core.h` and `MHI-AC-Ctrl-core.cpp`

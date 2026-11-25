@@ -1,6 +1,15 @@
 MHI-AC-Ctrl by absalom-muc
 
-**Changes in this fork** ([RickBruyninckx/MHI-AC-Ctrl](https://github.com/RickBruyninckx/MHI-AC-Ctrl), November 2026)
+**v2.9** ([RickBruyninckx/MHI-AC-Ctrl](https://github.com/RickBruyninckx/MHI-AC-Ctrl), November 2026)
+- Security: settings page on the home network requires a login (user `admin`); per-device password (random on first boot or `DEVICE_PASSWORD`) for setup AP, login and OTA; firmware upload via the web page disabled; OTA always password protected
+- Hostname editable on the settings page; MQTT topic root follows the hostname
+- AC status page (`/status`), works without MQTT
+- Home Assistant MQTT discovery (climate entity + sensors)
+- Defaults changed: `CONTINUE_WITHOUT_MQTT` and `POWERON_WHEN_CHANGING_MODE` enabled; `set/Power` works in both modes
+- Fixes: no endless loop at boot on a noisy MISO pin, bounded MQTT payload copy, OTA error and DS18x20 address log output, all compiler warnings, serial output no longer blocks without a monitor on the ESP32-S3, AC error log rate-limited
+- GitHub Actions build for `d1_mini` and `lolin_s3_mini`
+
+**Changes in this fork** (November 2026)
 - Build with PlatformIO: sketch converted to plain C++ (`src/main.cpp`), `platformio.ini` with environments `d1_mini`, `d1_mini_ota` and `lolin_s3_mini`, VS Code workspace, build-time settings in a git-ignored `secrets.ini`
 - ESP32 / ESP32-S3 support (WeMos LOLIN S3 mini): WiFi API differences handled, `Serial` on the native USB port, SPI and DS18x20 pins overridable per board
 - WiFi setup via captive portal (WiFiManager): no compiled-in SSID/password; setup AP `<HOSTNAME>-Setup` when no WiFi is saved or after `SETUP_AP_AFTER_OFFLINE_MIN` (5) minutes offline; saved network retried while the AP is open

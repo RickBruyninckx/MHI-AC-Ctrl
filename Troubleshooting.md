@@ -96,4 +96,4 @@ With PlatformIO use the `d1_mini_ota` environment and set `upload_port` to the I
 After an upload via the native USB port the ESP32-S3 can stay in download mode. Press the RST button once. The firmware waits up to 5 s after boot for a serial monitor, so open the monitor right after the reset to see the full boot log.
 
 ## :fire: Device does not connect to WiFi / setup access point not visible
-The setup access point `MHI-AC-Ctrl-Setup` is opened when no WiFi is saved or after 5 minutes without WiFi; the status LED blinks blue while it is open. To start over, erase the flash with `pio run -e <environment> -t erase` and flash again.
+The setup access point `<hostname>-Setup` is opened when no WiFi is saved or after 5 minutes without WiFi; the status LED blinks blue while it is open. Its password is the device password, printed in the serial log at every boot. To start over, erase the flash with `pio run -e <environment> -t erase` and flash again.

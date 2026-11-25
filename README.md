@@ -7,11 +7,15 @@ Reads and writes data (e.g. power, mode, fan status etc.) from/to a Mitsubishi H
 This is a fork of [absalom-muc/MHI-AC-Ctrl](https://github.com/absalom-muc/MHI-AC-Ctrl). Compared to the original it adds:
 - **PlatformIO build** (plain C++ instead of an Arduino sketch) with a VS Code workspace
 - **ESP32-S3 support** (WeMos LOLIN S3 mini) next to the original ESP8266 (WeMos D1 mini)
-- **WiFi setup via a captive portal**: no WiFi credentials in the code; the device opens a setup access point and serves a settings page (WiFi + MQTT broker) with a dark theme
+- **WiFi setup via a captive portal**: no WiFi credentials in the code; the device opens a setup access point and serves a settings page (WiFi, MQTT broker, hostname, password) with a dark theme
+- **Secured settings**: login on the home network, per-device password for the setup AP, settings page and OTA, no firmware upload via the web page
+- **AC status page** in the browser, works without MQTT
+- **Home Assistant MQTT discovery**: the AC appears as a climate entity automatically
 - **Robust reconnects**: the saved WiFi is retried while offline, the setup access point re-opens after 5 minutes offline, and an unreachable MQTT broker never drops the WiFi
 - **Status LED** showing WiFi / MQTT / AC state at a glance
+- **Changed defaults**: communication with the AC continues without MQTT (`CONTINUE_WITHOUT_MQTT`), mode `Off` switches the AC off (`POWERON_WHEN_CHANGING_MODE`)
 
-The AC protocol handling (`MHI-AC-Ctrl-core`) and the MQTT topics are unchanged (except the removed `APs` topic), so existing integrations keep working.
+The AC protocol handling (`MHI-AC-Ctrl-core`) and the MQTT topics are unchanged (except the removed `APs` topic; the topic root is now the hostname set on the settings page), so existing integrations keep working.
 See [Version.md](Version.md) for the detailed list of changes.
 
 # Attention:
@@ -75,7 +79,7 @@ Install PlatformIO (`pip install platformio`), then in the project directory:
 Board | Build environment | Notes
 ------|-------------------|------
 WeMos D1 mini (ESP8266) | `d1_mini` | 160 MHz (better stability), USB upload
-WeMos D1 mini, over the air | `d1_mini_ota` | set `upload_port` in `platformio.ini` to the device name / IP
+WeMos D1 mini, over the air | `d1_mini_ota` | set `upload_port` in `platformio.ini` to the device name / IP and `upload_flags = --auth=<device password>` (see `secrets.ini.example`)
 WeMos LOLIN S3 mini (ESP32-S3) | `lolin_s3_mini` | native USB; press RST after uploading if the board does not start
 
 ```
@@ -91,12 +95,15 @@ The SPI pins (SCK / MOSI / MISO) are GPIO 14 / 13 / 12 on the D1 mini and GPIO 1
 :warning: On the LOLIN S3 mini, don't connect USB while the board is powered by the AC (no protection diode on VBUS).
 
 ### First start: WiFi and MQTT setup
-1. After flashing, the device opens the WiFi access point **`MHI-AC-Ctrl-Setup`** (default password `mhi-ac-setup`, change it with `SETUP_AP_PASSWORD` in `secrets.ini`).
-2. Connect with a phone or laptop; the setup page opens automatically (otherwise browse to http://192.168.4.1/).
-3. **Configure WiFi**: select your network, enter the password and optionally the MQTT broker, then **Save**.
-4. Once connected, the same settings page is available on the home network at `http://<device IP>/` (the IP is shown in the serial log and on your router). Use **Setup** to change the MQTT broker later.
+1. **Device password**: on first boot the device generates a random password and prints it in the serial log at every boot (`Device password (...)`). Alternatively set your own with `DEVICE_PASSWORD` in `secrets.ini`. It is used for the setup access point, the settings login and OTA.
+2. The device opens the WiFi access point **`MHI-AC-Ctrl-Setup`**; connect with a phone or laptop using the device password. The setup page opens automatically (otherwise browse to http://192.168.4.1/).
+3. **Configure WiFi**: select your network, enter the WiFi password and optionally the MQTT broker, then **Save**.
+4. Once connected, the settings page is available on the home network at `http://<device IP>/` (IP in the serial log and on your router). Log in with user **`admin`** and the device password. **AC status** shows the AC values, **Setup** changes the MQTT broker, hostname and device password.
 
 Settings are stored in flash and survive reboots and firmware updates. When the WiFi is offline for 5 minutes, the setup access point opens again.
+
+### Home Assistant
+With an MQTT broker connected to Home Assistant, the device announces itself via MQTT discovery: a climate entity (mode incl. off, target temperature, room temperature, fan, vanes) plus outdoor temperature, energy, error code and WiFi signal sensors. No YAML needed. Disable with `-DHA_DISCOVERY=0`.
 Details: [SW-Configuration.md](SW-Configuration.md#wifi-setup-access-point).
 
 ### Status LED
