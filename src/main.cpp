@@ -452,6 +452,10 @@ StatusHandler mhiStatusHandler;
 
 void setup() {
   Serial.begin(115200);
+#if defined(ESP32) && ARDUINO_USB_CDC_ON_BOOT
+  // native USB: give the host up to 5s to (re)open the port, otherwise the boot log is lost
+  for (unsigned long t = millis(); !Serial && millis() - t < 5000;) delay(10);
+#endif
   delay(100);
   Serial.println();
   Serial.println(F("Starting MHI-AC-Ctrl v" VERSION));
