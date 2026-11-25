@@ -138,6 +138,11 @@ bool wifiConfigLoop() {
       wm.stopConfigPortal();
       WiFi.mode(WIFI_STA);
     }
+    if (!wm.getWebPortalActive()) {
+      // settings page also reachable on the home network
+      wm.startWebPortal();
+      Serial.printf_P(PSTR("Settings page: http://%s/\n"), WiFi.localIP().toString().c_str());
+    }
     return true;
   }
 
@@ -146,13 +151,23 @@ bool wifiConfigLoop() {
     Serial.println(F("WiFi connection lost"));
     WIFI_lost++;
     wasConnected = false;
+    lastRetryMillis = millis();
   }
   if (offlineSinceMillis == 0)
     offlineSinceMillis = millis();
 
   if (!wm.getConfigPortalActive()) {
-    if (millis() - offlineSinceMillis >= SETUP_AP_AFTER_OFFLINE_MIN * 60UL * 1000UL)
-      startPortal(F("WiFi offline for " "too long"));
+    if (millis() - offlineSinceMillis >= SETUP_AP_AFTER_OFFLINE_MIN * 60UL * 1000UL) {
+      if (wm.getWebPortalActive())
+        wm.stopWebPortal();                        // setup AP brings its own web server
+      startPortal(F("WiFi offline for too long"));
+    } else if (wm.getWiFiIsSaved() && millis() - lastRetryMillis >= 30UL * 1000UL) {
+      // don't rely on the SDK auto-reconnect: it is disabled after an explicit
+      // WiFi.disconnect() (e.g. by the MQTT reconnect workaround)
+      Serial.println(F("WiFi offline, retrying saved network"));
+      WiFi.begin();
+      lastRetryMillis = millis();
+    }
   } else if (wm.getWiFiIsSaved() && WiFi.softAPgetStationNum() == 0 &&
              millis() - lastRetryMillis >= 60UL * 1000UL) {
     // retry the saved network, but not while someone is using the setup page
