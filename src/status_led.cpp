@@ -82,11 +82,28 @@ void statusLedLoop() {
 }
 #endif
 
-void statusLedSet(LedState state) {
+static void setState(LedState state) {
   if (state == ledState) return;
   ledState = state;
   stateSinceMillis = millis();
 }
+
+#ifdef STATUS_LED_DEMO
+// build with -DSTATUS_LED_DEMO to cycle through all states (4 s each), ignoring the real state
+void statusLedSet(LedState) {
+  static const char* const names[] = {"CONNECTING (yellow)", "SETUP_AP (blue, blinking)",
+                                      "NO_MQTT (orange)", "NO_AC (red)", "OK (dim green)"};
+  static int shown = -1;
+  int idx = (millis() / 4000) % 5;
+  if (idx != shown) {
+    shown = idx;
+    Serial.printf("LED demo: %s\n", names[idx]);
+  }
+  setState((LedState)idx);
+}
+#else
+void statusLedSet(LedState state) { setState(state); }
+#endif
 
 #else   // STATUS_LED disabled
 void statusLedBegin() {}
