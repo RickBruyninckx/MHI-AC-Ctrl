@@ -32,9 +32,16 @@ const byte opdata[][2] PROGMEM = {
 #define minTimeInternalTroom 5000              // minimal time in ms used for Troom internal sensor changes for publishing to avoid jitter 
 
 // pin defintions
+// can be overridden per board via build flags (see platformio.ini)
+#ifndef SCK_PIN
 #define SCK_PIN  14
+#endif
+#ifndef MOSI_PIN
 #define MOSI_PIN 13
+#endif
+#ifndef MISO_PIN
 #define MISO_PIN 12
+#endif
 
 // constants for the frame
 #define SB0 0

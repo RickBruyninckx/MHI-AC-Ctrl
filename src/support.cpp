@@ -73,6 +73,12 @@ int WiFiStatus = WIFI_CONNECT_TIMEOUT;
 uint networksFound = 0;
 unsigned long WiFiTimeoutMillis;
 
+#if defined(ESP32)
+#define WIFI_OPEN_AUTH WIFI_AUTH_OPEN
+#else
+#define WIFI_OPEN_AUTH ENC_TYPE_NONE
+#endif
+
 void handleWiFiScanResult(int WifinetworksFound) {  // Handles async WiFi scan result
   int max_rssi = -999;
   int strongest_AP = -1;
@@ -82,7 +88,7 @@ void handleWiFiScanResult(int WifinetworksFound) {  // Handles async WiFi scan r
   Serial.printf_P(PSTR("handleWiFiScanResult(): %i access points available\n"), networksFound);
   for (uint i = 0; i < networksFound; i++)
   {
-    Serial.printf("%2d %25s %2d %ddBm %s %s %02x\n", i + 1, WiFi.SSID(i).c_str(), WiFi.channel(i), WiFi.RSSI(i), WiFi.BSSIDstr(i).c_str(), WiFi.encryptionType(i) == ENC_TYPE_NONE ? "open" : "secured", (uint)WiFi.encryptionType(i));
+    Serial.printf("%2d %25s %2d %ddBm %s %s %02x\n", i + 1, WiFi.SSID(i).c_str(), WiFi.channel(i), WiFi.RSSI(i), WiFi.BSSIDstr(i).c_str(), WiFi.encryptionType(i) == WIFI_OPEN_AUTH ? "open" : "secured", (uint)WiFi.encryptionType(i));
     if((strcmp(WiFi.SSID(i).c_str(), WIFI_SSID) == 0) && (WiFi.RSSI(i)>max_rssi)){
         max_rssi = WiFi.RSSI(i);
         strongest_AP = i;
@@ -114,10 +120,26 @@ void setupWiFi(int& WiFiStatusParam) {
     if (WiFiStatus == WIFI_CONNECT_OK || WiFiStatus == WIFI_CONNECT_TIMEOUT){  // Start scanning async if not in already in progress 
       WiFi.scanDelete();
       Serial.println(F("setupWiFi: Start async scanNetworks"));
+#if defined(ESP32)
+      WiFi.scanNetworks(true);  // async; result is polled below via WiFi.scanComplete()
+#else
       WiFi.scanNetworksAsync(handleWiFiScanResult);
+#endif
       WiFiStatus = WIFI_CONNECT_SCANNING;
       Serial.println(F("WIFI_CONNECT_SCANNING"));
     }
+
+#if defined(ESP32)
+    if (WiFiStatus == WIFI_CONNECT_SCANNING){  // ESP32 has no scan-done callback, poll for the result
+      int scanResult = WiFi.scanComplete();
+      if (scanResult >= 0)
+        handleWiFiScanResult(scanResult);
+      else if (scanResult == WIFI_SCAN_FAILED){
+        Serial.println(F("WiFi scan failed, retrying"));
+        WiFiStatus = WIFI_CONNECT_TIMEOUT;
+      }
+    }
+#endif
 
     if (WiFiStatus == WIFI_CONNECT_SCANNING_DONE){ // after scanning for WiFI_SEARCHStrongestAP. Should be still connected
         WiFiStatus = WIFI_CONNECT_OK;

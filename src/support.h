@@ -5,19 +5,33 @@
 
 #define VERSION "2.8"
 
+#ifndef WIFI_SSID
 #define WIFI_SSID ""
+#endif
+#ifndef WIFI_PASSWORD
 #define WIFI_PASSWORD ""
+#endif
+#ifndef HOSTNAME
 #define HOSTNAME "MHI-AC-Ctrl"
+#endif
 
 #define WiFI_SEARCHStrongestAP true                 // when false then the first WiFi access point with matching SSID found is used.
                                                     // when true then the strongest WiFi access point with matching SSID found is used, it doesn't work with hidden SSID
                                                     
 #define WiFI_SEARCH_FOR_STRONGER_AP_INTERVALL 12    // WiFi network re-scan interval in minutes with alternate to +5dB stronger signal if detected
 
+#ifndef MQTT_SERVER
 #define MQTT_SERVER "192.168.178.111"               // broker name or IP address of the broker
+#endif
+#ifndef MQTT_PORT
 #define MQTT_PORT 1883                              // port number used by the broker
+#endif
+#ifndef MQTT_USER
 #define MQTT_USER ""                                // if authentication is not used, leave it empty
+#endif
+#ifndef MQTT_PASSWORD
 #define MQTT_PASSWORD ""                            // if authentication is not used, leave it empty
+#endif
 #define MQTT_PREFIX HOSTNAME "/"                    // basic prefix used for publishing AC data (e.g. for status),
                                                     // replace "/" by e.g. "/Living-Room/" when you have multiple ACs
 #define MQTT_SET_PREFIX MQTT_PREFIX "set/"          // prefix for subscribing set commands, must end with a "/"
@@ -25,11 +39,15 @@
 #define MQTT_ERR_OP_PREFIX MQTT_PREFIX "ErrOpData/" // prefix for publishing operating data from last error, must end with a "/"
 
 #define OTA_HOSTNAME HOSTNAME                       // default for the OTA_HOSTNAME is the HOSTNAME
+#ifndef OTA_PASSWORD
 #define OTA_PASSWORD ""                             // Enter an OTA password if required
+#endif
 
 #define TEMP_MEASURE_PERIOD 0                       // period in seconds for temperature measurement with the external DS18x20 temperature sensor
                                                     // enter 0 if you don't use the DS18x20 
+#ifndef ONE_WIRE_BUS
 #define ONE_WIRE_BUS 4                              // D2, PIN for connecting temperature sensor DS18x20 DQ pin
+#endif
 #define ROOM_TEMP_DS18X20_OFFSET 0.0                // Temperature offset for DS18x20 sensor, can be positive or negative (examples: 0.0, -1.0, 1.5)
 
 //#define ROOM_TEMP_DS18X20                           // use room temperature from DS18x20
@@ -55,7 +73,11 @@
 
 // *** The configuration ends here ***
 
-#include <ESP8266WiFi.h>        // https://github.com/esp8266/Arduino/tree/master/libraries/ESP8266WiFi
+#if defined(ESP32)
+#include <WiFi.h>
+#else
+#include <ESP8266WiFi.h>
+#endif        // https://github.com/esp8266/Arduino/tree/master/libraries/ESP8266WiFi
 #include <PubSubClient.h>       // https://github.com/hmueller01/pubsubclient3
 #include <ArduinoOTA.h>         // https://github.com/esp8266/Arduino/tree/master/libraries/ArduinoOTA
 
