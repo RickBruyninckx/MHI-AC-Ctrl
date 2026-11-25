@@ -472,10 +472,10 @@ void setup() {
 #if TEMP_MEASURE_PERIOD > 0
   setup_ds18x20();
 #endif
-  initWiFi();
+  wifiConfigBegin();
   MeasureFrequency();
   setupOTA();
-  MQTTclient.setServer(MQTT_SERVER, MQTT_PORT);
+  MQTTclient.setServer(mqttConfig.server, mqttConfig.port);
   MQTTclient.setCallback(MQTT_subscribe_callback);
   mhi_ac_ctrl_core.MHIAcCtrlStatus(&mhiStatusHandler);
   mhi_ac_ctrl_core.init();
@@ -488,19 +488,9 @@ void setup() {
 
 void loop() {
   static byte ds18x20_value_old = 0;
-  static int WiFiStatus = WIFI_CONNECT_TIMEOUT;   // start connecting to WiFi
   static int MQTTStatus = MQTT_NOT_CONNECTED;
-  static unsigned long previousMillis = millis();
 
-  if (((WiFi.status() != WL_CONNECTED)  || 
-       (WiFiStatus != WIFI_CONNECT_OK)) || 
-       (WiFI_SEARCHStrongestAP && (millis() - previousMillis >= WiFI_SEARCH_FOR_STRONGER_AP_INTERVALL*60*1000))) {
-    //Serial.printf("loop: call setupWiFi(WiFiStatus)\n");
-    setupWiFi(WiFiStatus);
-    previousMillis = millis();
-    //Serial.println(WiFiStatus);
-  }
-  else {
+  if (wifiConfigLoop()) {   // handles setup AP / reconnect, true when WiFi is connected
     //Serial.printf("loop: WiFi.status()=%i\n", WiFi.status()); // see https://realglitch.com/2018/07/arduino-wifi-status-codes/
     MQTTStatus=MQTTreconnect();
     if (MQTTStatus == MQTT_RECONNECTED)

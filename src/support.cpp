@@ -60,106 +60,6 @@ void MeasureFrequency() {  // measure the frequency on the pins
   }
 }
 
-void initWiFi(){
-  WiFi.persistent(false);
-  WiFi.disconnect(true);    // Delete SDK wifi config
-  delay(200);
-  WiFi.mode(WIFI_STA);
-  WiFi.hostname(HOSTNAME); 
-  WiFi.setAutoReconnect(false);
-}
-
-int WiFiStatus = WIFI_CONNECT_TIMEOUT;
-uint networksFound = 0;
-unsigned long WiFiTimeoutMillis;
-
-#if defined(ESP32)
-#define WIFI_OPEN_AUTH WIFI_AUTH_OPEN
-#else
-#define WIFI_OPEN_AUTH ENC_TYPE_NONE
-#endif
-
-void handleWiFiScanResult(int WifinetworksFound) {  // Handles async WiFi scan result
-  int max_rssi = -999;
-  int strongest_AP = -1;
-
-  networksFound = WifinetworksFound;  // will be used other places
- 
-  Serial.printf_P(PSTR("handleWiFiScanResult(): %i access points available\n"), networksFound);
-  for (uint i = 0; i < networksFound; i++)
-  {
-    Serial.printf("%2d %25s %2d %ddBm %s %s %02x\n", i + 1, WiFi.SSID(i).c_str(), WiFi.channel(i), WiFi.RSSI(i), WiFi.BSSIDstr(i).c_str(), WiFi.encryptionType(i) == WIFI_OPEN_AUTH ? "open" : "secured", (uint)WiFi.encryptionType(i));
-    if((strcmp(WiFi.SSID(i).c_str(), WIFI_SSID) == 0) && (WiFi.RSSI(i)>max_rssi)){
-        max_rssi = WiFi.RSSI(i);
-        strongest_AP = i;
-    }
-  }
-  Serial.printf_P(PSTR("current BSSID: %s, strongest BSSID: %s\n"), WiFi.BSSIDstr().c_str(), WiFi.BSSIDstr(strongest_AP).c_str());
-  if((WiFi.status() != WL_CONNECTED) || ((max_rssi > WiFi.RSSI() + 10) && (strcmp(WiFi.BSSIDstr().c_str(), WiFi.BSSIDstr(strongest_AP).c_str()) != 0))) {
-    if(strongest_AP != -1) {
-      Serial.printf_P(PSTR("Connecting from bssid:%s to bssid:%s, channel:%i\n"), WiFi.BSSIDstr().c_str(), WiFi.BSSIDstr(strongest_AP).c_str(), WiFi.channel(strongest_AP));
-      WiFi.begin(WIFI_SSID, WIFI_PASSWORD, WiFi.channel(strongest_AP), WiFi.BSSID(strongest_AP), true);
-    }
-    else {
-      Serial.println(F("No matching AP found (maybe hidden SSID), however try to connect."));
-      WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-    }
-    WiFiStatus = WIFI_CONNECT_ONGOING;
-    Serial.println(F("WIFI_CONNECT_ONGOING"));
-    WiFiTimeoutMillis = millis();
-  }
-  else {  // scanning is started for WiFI_SEARCHStrongestAP and WiFi was already connected
-    WiFiStatus = WIFI_CONNECT_SCANNING_DONE;
-    Serial.println(F("WIFI_CONNECT_SCANNING_DONE"));
-  }
-}
-
-void setupWiFi(int& WiFiStatusParam) {
-
-  if(WiFiStatus != WIFI_CONNECT_ONGOING) {   // WIFI_CONNECT_OK or WIFI_CONNECT_TIMEOUT or WIFI_CONNECT_SCANNING or WIFI_CONNECT_SCANNING_DONE
-    if (WiFiStatus == WIFI_CONNECT_OK || WiFiStatus == WIFI_CONNECT_TIMEOUT){  // Start scanning async if not in already in progress 
-      WiFi.scanDelete();
-      Serial.println(F("setupWiFi: Start async scanNetworks"));
-#if defined(ESP32)
-      WiFi.scanNetworks(true);  // async; result is polled below via WiFi.scanComplete()
-#else
-      WiFi.scanNetworksAsync(handleWiFiScanResult);
-#endif
-      WiFiStatus = WIFI_CONNECT_SCANNING;
-      Serial.println(F("WIFI_CONNECT_SCANNING"));
-    }
-
-#if defined(ESP32)
-    if (WiFiStatus == WIFI_CONNECT_SCANNING){  // ESP32 has no scan-done callback, poll for the result
-      int scanResult = WiFi.scanComplete();
-      if (scanResult >= 0)
-        handleWiFiScanResult(scanResult);
-      else if (scanResult == WIFI_SCAN_FAILED){
-        Serial.println(F("WiFi scan failed, retrying"));
-        WiFiStatus = WIFI_CONNECT_TIMEOUT;
-      }
-    }
-#endif
-
-    if (WiFiStatus == WIFI_CONNECT_SCANNING_DONE){ // after scanning for WiFI_SEARCHStrongestAP. Should be still connected
-        WiFiStatus = WIFI_CONNECT_OK;
-        Serial.println(F("WIFI_CONNECT_OK"));
-    }
-  }
-  else { // WiFiStatus == WIFI_CONNECT_ONGOING
-    if(WiFi.status() == WL_CONNECTED){
-      Serial.printf_P(PSTR(" connected to %s, IP address: %s (%ddBm)\n"), WIFI_SSID, WiFi.localIP().toString().c_str(), WiFi.RSSI());
-      WiFiStatus = WIFI_CONNECT_OK;
-      Serial.println(F("WIFI_CONNECT_OK"));
-    }
-    else if(millis() - WiFiTimeoutMillis > 10*1000) {  // timeout after 10 seconds
-      WiFiStatus = WIFI_CONNECT_TIMEOUT;
-      Serial.println(F("WIFI_CONNECT_TIMEOUT"));
-    }
-  }
-  WiFiStatusParam = WiFiStatus; // return WiFiStatus to caller
-}
-
 int MQTTreconnect() {
   char strtmp[50];
   static int reconnect_trials=0;
@@ -172,7 +72,7 @@ int MQTTreconnect() {
       reconnect_trials=0;
     }
 
-    if (MQTTclient.connect(HOSTNAME, MQTT_USER, MQTT_PASSWORD, MQTT_PREFIX TOPIC_CONNECTED, 0, true, PAYLOAD_CONNECTED_FALSE)) {
+    if (MQTTclient.connect(HOSTNAME, mqttConfig.user[0] ? mqttConfig.user : nullptr, mqttConfig.user[0] ? mqttConfig.password : nullptr, MQTT_PREFIX TOPIC_CONNECTED, 0, true, PAYLOAD_CONNECTED_FALSE)) {
       Serial.println(F(" connected"));
       Serial.printf("MQTTclient.connected=%i\n", MQTTclient.connected());
       reconnect_trials=0;
@@ -186,21 +86,6 @@ int MQTTreconnect() {
       output_P((ACStatus)type_status, PSTR(TOPIC_MQTT_LOST), strtmp);
       WiFi.BSSIDstr().toCharArray(strtmp, 20);
       output_P((ACStatus)type_status, PSTR(TOPIC_WIFI_BSSID), strtmp);
-
-      // for testing publish list of access points with the expected SSID 
-      Serial.printf("MQTTreconnect(): %i access points available\n", networksFound);         
-      for (uint i = 0; i < networksFound; i++)
-      {
-        if(strcmp(WiFi.SSID(i).c_str(), WIFI_SSID) == 0){
-          strcpy(strtmp, "BSSID:");
-          strcat(strtmp, WiFi.BSSIDstr(i).c_str());
-          char strtmp2[20];
-          strcat(strtmp, " RSSI:");
-          itoa(WiFi.RSSI(i), strtmp2, 10);
-          strcat(strtmp, strtmp2);
-          MQTTclient.publish(MQTT_PREFIX "APs", strtmp, true);
-        }
-      }
 
       itoa(rising_edge_cnt.SCK, strtmp, 10);
       output_P((ACStatus)type_status, PSTR(TOPIC_FSCK), strtmp);

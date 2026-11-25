@@ -5,21 +5,11 @@
 
 #define VERSION "2.8"
 
-#ifndef WIFI_SSID
-#define WIFI_SSID ""
-#endif
-#ifndef WIFI_PASSWORD
-#define WIFI_PASSWORD ""
-#endif
 #ifndef HOSTNAME
 #define HOSTNAME "MHI-AC-Ctrl"
 #endif
 
-#define WiFI_SEARCHStrongestAP true                 // when false then the first WiFi access point with matching SSID found is used.
-                                                    // when true then the strongest WiFi access point with matching SSID found is used, it doesn't work with hidden SSID
-                                                    
-#define WiFI_SEARCH_FOR_STRONGER_AP_INTERVALL 12    // WiFi network re-scan interval in minutes with alternate to +5dB stronger signal if detected
-
+// MQTT defaults, used until settings are saved via the WiFi setup page
 #ifndef MQTT_SERVER
 #define MQTT_SERVER "192.168.178.111"               // broker name or IP address of the broker
 #endif
@@ -93,10 +83,11 @@
 #endif
 
 extern PubSubClient MQTTclient;
+extern int WIFI_lost;
+
+#include "wifi_config.h"
 
 void MeasureFrequency();                                      // measures the frequency of the SPI pins
-void initWiFi();                                              // basic WiFi initialization
-void setupWiFi(int& WiFiStatus);                              // setup WIFi connection to AP
 int MQTTreconnect();                                          // (re)connect to MQTT broker
 void publish_cmd_ok();                                        // last MQTT cmd was o.k.
 void publish_cmd_unknown();                                   // last MQTT cmd was unknown
@@ -106,12 +97,6 @@ void output_P(ACStatus status, PGM_P topic, PGM_P payload);   // publish via MQT
 void setupOTA();                                              // initialize and start OTA
 void setup_ds18x20();                                         // setup the temperature measurement
 byte getDs18x20Temperature(int temp_hysterese);               // read the temperature from the DS18x20 sensor
-
-#define WIFI_CONNECT_SCANNING 4
-#define WIFI_CONNECT_SCANNING_DONE 3
-#define WIFI_CONNECT_TIMEOUT 2
-#define WIFI_CONNECT_ONGOING 1
-#define WIFI_CONNECT_OK 0
 
 #define MQTT_NOT_CONNECTED 2
 #define MQTT_RECONNECTED 1

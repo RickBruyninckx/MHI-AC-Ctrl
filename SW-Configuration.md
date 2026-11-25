@@ -10,27 +10,24 @@ The basic settings will be adapted in three files:
 - [MHI-AC-Ctrl.h](src/MHI-AC-Ctrl.h) for input / output settings (i.e. topic / payload text)
 - [MHI-AC-Ctrl-core.h](src/MHI-AC-Ctrl-core.h) for settings related to the behaviour of MHI-AC-Ctrl (e.g. selection of operating data)
 
-## WiFi ([support.h](src/support.h))
-WiFi STA mode is supported.
+## WiFi (setup access point)
+WiFi credentials are not compiled into the firmware. They are entered on a setup page served by the device itself ([wifi_config.h](src/wifi_config.h), based on [WiFiManager](https://github.com/tzapu/WiFiManager)):
 
-### WiFi Settings (SSID, Password, hostname)
-Adapt the SSID and the password. Changing the hostname is usually not required.
+1. When no WiFi credentials are saved, the device opens the access point **`MHI-AC-Ctrl-Setup`** (password: `SETUP_AP_PASSWORD`, default `mhi-ac-setup`).
+2. Connect to it with a phone or laptop. The setup page opens automatically (otherwise browse to http://192.168.4.1/).
+3. Choose **Configure WiFi**, pick your network, enter the password and, optionally, the MQTT broker settings, then press **Save**.
+
+The credentials are stored in flash and survive reboots and firmware updates.
+When the WiFi connection is lost for `SETUP_AP_AFTER_OFFLINE_MIN` minutes (default 5), the setup access point is opened again.
+While it is open, the saved network is retried every minute (only when nobody is connected to the setup access point) and the access point closes as soon as the connection is back.
+
+Build-time options (e.g. in `secrets.ini`, see [secrets.ini.example](secrets.ini.example)):
 ```cpp
-#define WIFI_SSID "your SSID"
-#define WIFI_PASSWORD "your WiFi password"
-#define HOSTNAME "MHI-AC-Ctrl"
+#define HOSTNAME "MHI-AC-Ctrl"                  // also used for the setup AP name: HOSTNAME "-Setup"
+#define SETUP_AP_PASSWORD "mhi-ac-setup"        // min. 8 characters, "" for an open access point
+#define SETUP_AP_AFTER_OFFLINE_MIN 5            // minutes offline before the setup AP is opened
 ```
 Changing the hostname is required when multiple ACs should be supported. E.g. replace `"MHI-AC-Ctrl"` by `"Living-Room-MHI-AC-Ctrl"`
-
-Per default ESP8266 uses the first WiFi access point (AP) with matching SSID. This behaviour can be changed.
-```cpp
-#define UseStrongestAP true             // when false then the first WiFi access point with matching SSID found is used.
-                                        // when true then the strongest WiFi access point with matching SSID found is used, it doesn't work with hidden SSID
-```
-Configure the time interval for searching a stronger AP.
-```cpp
-#define WiFI_SEARCH_FOR_STRONGER_AP_INTERVALL 12    // WiFi network re-scan interval in minutes with alternate to +5dB stronger signal if detected
-```
 
 ## MQTT ([support.h](src/support.h))
 The program uses the MQTT client library [PubSubClient3](https://github.com/hmueller01/pubsubclient3) from Holger Müller (hmueller01), originally written by Nick O'Leary (knolleary).
@@ -38,7 +35,8 @@ If you are not familiar with MQTT you find on the Internet endless numbers of de
 I recommend [MQTT Explorer](http://mqtt-explorer.com/) a great all-round MQTT client that provides a structured topic overview for the first steps.
 
 ### MQTT General Settings (broker, port, account data)
-Adapt the server (broker) name and the port if needed:
+The broker settings are entered on the WiFi setup page (see above) and stored in flash.
+The values below are only used as defaults until settings have been saved there:
 
 ```cpp
 #define MQTT_SERVER "MQTT broker name"  // broker name or IP address of the broker
