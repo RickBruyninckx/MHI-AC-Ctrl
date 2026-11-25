@@ -6,6 +6,7 @@
 #include "MHI-AC-Ctrl-core.h"
 #include "MHI-AC-Ctrl.h"
 #include "support.h"
+#include "status_led.h"
 
 MHI_AC_Ctrl_Core mhi_ac_ctrl_core;
 
@@ -472,6 +473,7 @@ void setup() {
 #if TEMP_MEASURE_PERIOD > 0
   setup_ds18x20();
 #endif
+  statusLedBegin();
   wifiConfigBegin();
   MeasureFrequency();
   setupOTA();
@@ -489,8 +491,11 @@ void setup() {
 void loop() {
   static byte ds18x20_value_old = 0;
   static int MQTTStatus = MQTT_NOT_CONNECTED;
+  static unsigned long lastAcFrameMillis = 0;
+  static bool acFrameSeen = false;
 
-  if (wifiConfigLoop()) {   // handles setup AP / reconnect, true when WiFi is connected
+  bool wifiOk = wifiConfigLoop();
+  if (wifiOk) {   // handles setup AP / reconnect, true when WiFi is connected
     //Serial.printf("loop: WiFi.status()=%i\n", WiFi.status()); // see https://realglitch.com/2018/07/arduino-wifi-status-codes/
     MQTTStatus=MQTTreconnect();
     if (MQTTStatus == MQTT_RECONNECTED)
@@ -546,8 +551,22 @@ void loop() {
     int ret = mhi_ac_ctrl_core.loop(80);
     if (ret < 0)
       Serial.printf_P(PSTR("mhi_ac_ctrl_core.loop error: %i\n"), ret);
-#ifndef CONTINUE_WITHOUT_MQTT 
+    else {
+      lastAcFrameMillis = millis();
+      acFrameSeen = true;
+    }
+#ifndef CONTINUE_WITHOUT_MQTT
   }
 #endif
+
+  // status LED, see status_led.h
+  bool mqttOk = (MQTTStatus == MQTT_RECONNECTED) || (MQTTStatus == MQTT_CONNECT_OK);
+  bool acOk = acFrameSeen && (millis() - lastAcFrameMillis < 5000);
+  if (wifiConfigPortalActive())  statusLedSet(LED_SETUP_AP);
+  else if (!wifiOk)              statusLedSet(LED_CONNECTING);
+  else if (!mqttOk)              statusLedSet(LED_NO_MQTT);
+  else if (!acOk)                statusLedSet(LED_NO_AC);
+  else                           statusLedSet(LED_OK);
+  statusLedLoop();
 
 }
