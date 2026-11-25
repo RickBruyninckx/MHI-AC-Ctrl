@@ -1,5 +1,16 @@
 MHI-AC-Ctrl by absalom-muc
 
+**Changes in this fork** ([RickBruyninckx/MHI-AC-Ctrl](https://github.com/RickBruyninckx/MHI-AC-Ctrl), November 2026)
+- Build with PlatformIO: sketch converted to plain C++ (`src/main.cpp`), `platformio.ini` with environments `d1_mini`, `d1_mini_ota` and `lolin_s3_mini`, VS Code workspace, build-time settings in a git-ignored `secrets.ini`
+- ESP32 / ESP32-S3 support (WeMos LOLIN S3 mini): WiFi API differences handled, `Serial` on the native USB port, SPI and DS18x20 pins overridable per board
+- WiFi setup via captive portal (WiFiManager): no compiled-in SSID/password; setup AP `<HOSTNAME>-Setup` when no WiFi is saved or after `SETUP_AP_AFTER_OFFLINE_MIN` (5) minutes offline; saved network retried while the AP is open
+- MQTT broker, port, user and password editable on the settings page and stored in flash; the `MQTT_*` defines are only defaults
+- Settings page also served on the home network at the device IP; dark theme for all pages
+- WiFi reconnect: saved network retried every 30 s while offline
+- MQTT: an unreachable broker no longer drops the WiFi (only the MQTT socket is reset); retry every `MQTT_RETRY_INTERVAL_S` (10) s
+- Removed: scanning for / switching to the strongest access point (`WiFI_SEARCHStrongestAP`) and the `APs` MQTT topic
+- Status LED: RGB LED on the LOLIN S3 mini, blink patterns on the D1 mini LED; `-DSTATUS_LED_DEMO` cycles all states
+
 **Adaptions since version 2.8** (not released)
 - [Move from unmaintained knolleary/pubsubclient to hmueller01/pubsubclient3](https://github.com/absalom-muc/MHI-AC-Ctrl/pull/212)
 - [Introduce a passive mode to allow RC timer](https://github.com/absalom-muc/MHI-AC-Ctrl/pull/220)

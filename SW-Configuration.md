@@ -5,8 +5,12 @@ The following descriptions address:
 3. Integration examples
 
 # Basic settings
-The basic settings will be adapted in three files:
-- [support.h](src/support.h) for general settings related to WiFi, MQTT, OTA and the external temperature sensor DS18x20
+WiFi and the MQTT broker are configured at runtime on the device's settings page (see [WiFi](#wifi-setup-access-point)).
+All other settings are `#define`s. Most of them can be overridden without editing the sources by adding `-D` build flags in `secrets.ini` (copy [secrets.ini.example](secrets.ini.example)), e.g. `'-DMQTT_SERVER="192.168.1.10"'`.
+The defaults are located in:
+- [support.h](src/support.h) for general settings related to MQTT, OTA and the external temperature sensor DS18x20
+- [wifi_config.h](src/wifi_config.h) for the WiFi setup access point
+- [status_led.h](src/status_led.h) for the status LED
 - [MHI-AC-Ctrl.h](src/MHI-AC-Ctrl.h) for input / output settings (i.e. topic / payload text)
 - [MHI-AC-Ctrl-core.h](src/MHI-AC-Ctrl-core.h) for settings related to the behaviour of MHI-AC-Ctrl (e.g. selection of operating data)
 
@@ -49,6 +53,11 @@ If you want to use MQTT authentication enter user name and password:
 #define MQTT_PASSWORD ""      // if authentication is not used, leave it empty
 ```
 Note: TLS/SSL is not supported
+
+While the broker is unreachable, a connection attempt is made every `MQTT_RETRY_INTERVAL_S` seconds (default 10). WiFi stays connected; after 10 failed attempts only the MQTT socket is reset.
+```cpp
+#define MQTT_RETRY_INTERVAL_S 10   // seconds between MQTT connect attempts while the broker is unreachable
+```
 
 The following sections show the configuration for the MQTT paths.
 
@@ -94,12 +103,11 @@ connected|r  |0, 1|MQTT connection status to broker
 fMISO    |r  |unsigned integer|frequency of the MISO pin in Hz during boot
 fMOSI    |r  |unsigned integer|frequency of the MOSI pin in Hz during boot
 fSCK     |r  |unsigned integer|frequency of the SCK pin in Hz during boot
-reset|w|"reset"|resets the ESP8266
+reset|w|"reset"|resets the ESP8266 / ESP32
 RSSI     |r  |integer         |WiFI RSSI / signal Strength in dBm after MQTT (re-)connect
 Version  |r  |string          |Version number of MHI-AC-Ctrl
 WIFI_LOST|r  |integer         |number of lost WiFi connections since last reset
 MQTT_LOST|r  |integer         |number of lost MQTT connections since last reset
-APs      |r  |string          |Matched APs seen at scan with RSSI value
 
 Note: The topic and the payload text of the status data is adaptable by defines in [MHI-AC-Ctrl.h](src/MHI-AC-Ctrl.h).
 
@@ -165,7 +173,7 @@ and how often the sensor should be read. To use reading of the external sensor y
 ```cpp
 #define TEMP_MEASURE_PERIOD 0   // period in seconds for temperature measurement with the external DS18x20 temperature sensor
                                 // set to e.g. 30 to read the sensor every 30 seconds.
-#define ONE_WIRE_BUS 4          // D2, PIN for connecting temperature sensor DS18x20 DQ pin
+#define ONE_WIRE_BUS 4          // D2, PIN for connecting temperature sensor DS18x20 DQ pin (overridable per board in platformio.ini)
 #define ROOM_TEMP_DS18X20_OFFSET 0.0   // Temperature offset for DS18x20 sensor, can be positive or negative (examples: 0.0, -1.0, 1.5)
 ```
 Note: the according libraries [OneWire](https://www.pjrc.com/teensy/td_libs_OneWire.html) and [DallasTemperature](https://github.com/milesburton/Arduino-Temperature-Control-Library) are only used if `TEMP_MEASURE_PERIOD > 0`.
@@ -323,9 +331,34 @@ to
 Warning: be aware that there might be some safety implication and that the deactivation of this feature is on your own risk.
 The AC now keeps running and no control is possible anymore when MQTT is disconnected. Also of course no MQTT topics are updated anymore. Of course control is still possible with the remote control.
 
+## SPI pins
+The AC is connected to GPIO 14 (SCK), 13 (MOSI) and 12 (MISO), defined in [MHI-AC-Ctrl-core.h](src/MHI-AC-Ctrl-core.h). They can be overridden per board with build flags, see the `lolin_s3_mini` environment in [platformio.ini](platformio.ini):
+```ini
+build_flags =
+    -DSCK_PIN=14
+    -DMOSI_PIN=13
+    -DMISO_PIN=12
+```
+
+## Status LED ([status_led.h](src/status_led.h))
+LOLIN S3 mini (RGB LED, GPIO47) | D1 mini (blue LED, GPIO2) | Meaning
+--------------------------------|---------------------------|--------
+yellow | fast blink | connecting to WiFi
+blue, blinking | slow blink | setup access point is open
+orange | double blink | WiFi OK, MQTT broker not reachable
+red | steady on | MQTT OK, but no valid frame from the AC for 5 s
+dim green | short flash every 3 s | everything OK
+
+```cpp
+#define STATUS_LED 1                                  // 0 disables the LED
+#define STATUS_LED_PIN RGB_BUILTIN                    // or LED_BUILTIN on boards without RGB LED
+#define STATUS_LED_COLOR_ORDER LED_COLOR_ORDER_GRB    // RGB LED only; use LED_COLOR_ORDER_RGB if red and green are swapped
+```
+Build with `-DSTATUS_LED_DEMO` to cycle through all states (4 s each) for checking the colors.
+
 ## MHI-AC-Ctrl partitioning
 MHI-AC-Ctrl-core implements the core functions (SPI read/write, communication with the wrapper).
-Wifi, MQTT, OTA and DS18x20 stuff is located in `support.h` and `support.cpp`.
+MQTT, OTA and DS18x20 stuff is located in `support.h` and `support.cpp`, WiFi setup and the persisted MQTT settings in `wifi_config.h` and `wifi_config.cpp`, the status LED in `status_led.h` and `status_led.cpp`. The styling of the settings pages is in `web_theme.h`.
 `main.cpp` and `MHI-AC-Ctrl.h` contain the wrapper for `MHI-AC-Ctrl-core.cpp` and `support.cpp`.
 
 ### `MHI-AC-Ctrl-core.h` and `MHI-AC-Ctrl-core.cpp`
@@ -378,7 +411,10 @@ The error operating data will be read upon a request via this function.
 
 ### `support.*`
 Provides the interface between MHI-AC-Ctrl and the user interfaces.
-It contains helper functions for serving WiFi, MQTT, OTA and the external temperature sensor DS18x20.
+It contains helper functions for serving MQTT, OTA and the external temperature sensor DS18x20.
+
+### `wifi_config.*`
+WiFi provisioning with [WiFiManager](https://github.com/tzapu/WiFiManager): setup access point, settings page (also on the home network), reconnect handling and the MQTT settings stored in flash (EEPROM area).
 
 ### `MHI-AC-Ctrl.h` and `main.cpp`
 This is the wrapper for MHI-AC-Ctrl-core and support.
@@ -401,6 +437,6 @@ You find here some examples for integration of MHI-AC-Ctrl
 - [Tasmota](https://github.com/absalom-muc/MHI-AC-Ctrl/issues/13#issuecomment-630425714)
 - [ioBroker](https://forum.iobroker.net/topic/17041/anfrage-airconwithme-intesishome-klimasteuerung-adapter/14)
 - [FHEM](https://forum.fhem.de/index.php/topic,88841.0/all.html)
-- [WiFi SSID, hostname and MQTT server dynamic](https://github.com/absalom-muc/MHI-AC-Ctrl/pull/69)
+- [WiFi SSID, hostname and MQTT server dynamic](https://github.com/absalom-muc/MHI-AC-Ctrl/pull/69) (built into this fork, see [WiFi](#wifi-setup-access-point))
 - [Web page with MQTT](https://github.com/absalom-muc/MHI-AC-Ctrl/issues/141)
 - [Display with AC controller](https://github.com/absalom-muc/MHI-AC-Ctrl/issues/173)

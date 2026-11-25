@@ -2,7 +2,7 @@
 You find here problems and solutions collected by users. I spend some time to write this documentation. Please take your time to read it before you open a new issue.
 
 If you can't find the solution for your problem here and not in the existing  [Issues](https://github.com/absalom-muc/MHI-AC-Ctrl/issues?q=is%3Aissue) you can open a new issue. But please consider the following topics:
-- You should have a basic understanding how to use an ESP8266. That includes the usage of an IDE for programming, compile, flash, OTA and log output via the serial terminal.
+- You should have a basic understanding how to use an ESP8266 / ESP32. That includes the usage of PlatformIO (or another IDE) for compile, flash, OTA and log output via the serial terminal.
 - You should have a basic understanding of the MQTT protocol and how to setup a MQTT broker
 
 There are great descriptions in the WWW related to the topics above. Please use your preferred search engine.
@@ -14,7 +14,7 @@ If you open a new issue, please consider the following topics:
 - MHI-AC-Ctrl outputs some basic status information via the serial terminal. Please use it for your first analysis and upload it together with a new Issue. Check this [section](#recording-a-basic-log-file)
 
 ## Recording a basic log file
-You can use e.g. the Arduino IDE to record the serial output. Apply a baud rate of 115000 Baud and switch **on** the time stamp. In order not to overload the Issue, the log should not be copied directly into the Issue, but copied to a text file and attached to the Issue.
+You can use e.g. `pio device monitor -f time` to record the serial output with time stamps (115200 Baud). In order not to overload the Issue, the log should not be copied directly into the Issue, but copied to a text file and attached to the Issue.
 
 ## Recording a detailed log of the SPI waveforms
 This is done via the [SPI-logger](https://github.com/absalom-muc/MHI-AC-Ctrl/blob/master/testprog/SPI_logger.ino). You can use e.g. the Arduino IDE to record the serial output. Apply a baud rate of 115000 Baud and switch **off** the time stamp. In order not to overload the Issue, the log should not be copied directly into the Issue, but copied to a text file and attached to the Issue.
@@ -90,3 +90,10 @@ This effect occurs with some AC models. The cause is unclear.
 
 ## :fire: Can't see the device in in Arduino IDE 'tools -> port' for OTA
 I believe this is a general OTA problem, not related to MHI-AC-Ctrl. I made good experience using [espota.py](https://github.com/esp8266/Arduino/blob/master/tools/espota.py) instead of the Arduino IDE for OTA.
+With PlatformIO use the `d1_mini_ota` environment and set `upload_port` to the IP address of the device.
+
+## :fire: LOLIN S3 mini does not start after flashing / no serial output
+After an upload via the native USB port the ESP32-S3 can stay in download mode. Press the RST button once. The firmware waits up to 5 s after boot for a serial monitor, so open the monitor right after the reset to see the full boot log.
+
+## :fire: Device does not connect to WiFi / setup access point not visible
+The setup access point `MHI-AC-Ctrl-Setup` is opened when no WiFi is saved or after 5 minutes without WiFi; the status LED blinks blue while it is open. To start over, erase the flash with `pio run -e <environment> -t erase` and flash again.

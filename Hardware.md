@@ -60,6 +60,8 @@ The JST connector provides +12V. The DC-DC converter [TSR 1-2450](https://www.tr
 
 ## Signal Connection
 The ESP8266 SPI signals SCL (SPI clock), MOSI (Master Out Slave In) and MISO (Master In Slave Out) are connected via a voltage level shifter 5V <-> 3.3V with the AC. Direct connection of the signals without a level shifter could damage your ESP8266!
+The ESP32-S3 (WeMos LOLIN S3 mini) uses the same GPIO numbers 14 / 13 / 12 by default. Note: the LOLIN S3 mini has the D1 mini form factor, but it has not been verified that the D1 mini header positions used by the MHI-AC-Ctrl PCB carry GPIO 14 / 13 / 12 on the S3 mini. Check the pinout before plugging it in, and adapt the pins in `platformio.ini` if needed.
+
 In an early version I used a resistor voltage divider, but since the SPI of the AC has high impedance outputs, a voltage level shifter seems to be better. The voltage level shifters are bi-directional. That means the according ESP8266 pins (SCL, MOSI, MISO) could be inputs or outputs.
 
 Please find [here](https://github.com/absalom-muc/MHI-AC-Ctrl/issues/65) the discussion if the level shifter can be omitted. 

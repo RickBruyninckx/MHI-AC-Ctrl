@@ -1,14 +1,25 @@
 # MHI-AC-Ctrl
-Reads and writes data (e.g. power, mode, fan status etc.) from/to a Mitsubishi Heavy Industries (MHI) air conditioner (AC) via SPI controlled by MQTT. The AC is the SPI master and the ESP8266 is the SPI slave.
+Reads and writes data (e.g. power, mode, fan status etc.) from/to a Mitsubishi Heavy Industries (MHI) air conditioner (AC) via SPI controlled by MQTT. The AC is the SPI master and the ESP8266 / ESP32 is the SPI slave.
 
 <img src="/images/IoT-MQTT-Panel.jpg" width=200 align="right" />
+
+# About this fork
+This is a fork of [absalom-muc/MHI-AC-Ctrl](https://github.com/absalom-muc/MHI-AC-Ctrl). Compared to the original it adds:
+- **PlatformIO build** (plain C++ instead of an Arduino sketch) with a VS Code workspace
+- **ESP32-S3 support** (WeMos LOLIN S3 mini) next to the original ESP8266 (WeMos D1 mini)
+- **WiFi setup via a captive portal**: no WiFi credentials in the code; the device opens a setup access point and serves a settings page (WiFi + MQTT broker) with a dark theme
+- **Robust reconnects**: the saved WiFi is retried while offline, the setup access point re-opens after 5 minutes offline, and an unreachable MQTT broker never drops the WiFi
+- **Status LED** showing WiFi / MQTT / AC state at a glance
+
+The AC protocol handling (`MHI-AC-Ctrl-core`) and the MQTT topics are unchanged (except the removed `APs` topic), so existing integrations keep working.
+See [Version.md](Version.md) for the detailed list of changes.
 
 # Attention:
 :warning: You have to open the indoor unit to have access to the SPI. Opening of the indoor unit should be done by 
 a qualified professional because faulty handling may cause leakage of water, electric shock or fire! :warning: 
 
 # Prerequisites:
-For use of the program you have to connect your ESP8266 (I use a LOLIN(WEMOS) D1 R2 & mini with 80 MHz) via a
+For use of the program you have to connect your ESP8266 (I use a LOLIN(WEMOS) D1 R2 & mini with 80 MHz) or an ESP32-S3 (WeMos LOLIN S3 mini) via a
 cable connector to your air conditioner. This has to be a split device (separated indoor and outdoor unit).
 I assume that all AC units of the type "SRK xx ZS-S" / "SRC xx ZS-S" are supported. I use the indoor unit SRK 35 ZS-S and the outdoor unit SRC 35 ZS-S. Users reported that additionally the following models are supported:
 
@@ -50,18 +61,52 @@ The ESP8266 SPI signals SCL (SPI clock), MOSI (Master Out Slave In) and MISO (Ma
 More details are described in [Hardware.md](Hardware.md).
 
 ## Software:
-The program uses the following libraries:
+The project is built with [PlatformIO](https://platformio.org/), either from the command line or with the PlatformIO IDE extension for VS Code (open `MHI-AC-Ctrl.code-workspace`, the extension is recommended automatically).
+Libraries are downloaded automatically:
  - MQTT client library [PubSubClient3](https://github.com/hmueller01/pubsubclient3)
    - :warning: Don't use PubSubClient v2.8.0, it is broken due to issue [#747](https://github.com/knolleary/pubsubclient/issues/747) :warning:
- - [ArduinoOTA](https://github.com/esp8266/Arduino/tree/master/libraries/ArduinoOTA) (might be removed in future)
- 
-and optionally you need for the use of an external temperature sensor DS18x20 the libraries
- - [OneWire](https://www.pjrc.com/teensy/td_libs_OneWire.html)
- - [DallasTemperature](https://github.com/milesburton/Arduino-Temperature-Control-Library)
+ - [WiFiManager](https://github.com/tzapu/WiFiManager) for the WiFi setup / settings page
+ - [ArduinoOTA](https://github.com/esp8266/Arduino/tree/master/libraries/ArduinoOTA) (part of the ESP8266 / ESP32 core)
+ - [OneWire](https://www.pjrc.com/teensy/td_libs_OneWire.html) and [DallasTemperature](https://github.com/milesburton/Arduino-Temperature-Control-Library) (only used with an external DS18x20 temperature sensor)
 
-Please check the GitHub pages to see how to install them (usually via tools -> libraries).
+### Build and flash
+Install PlatformIO (`pip install platformio`), then in the project directory:
 
-Create a sub-directory "MHI-AC-Ctrl" and copy the files from the latest [release](https://github.com/absalom-muc/MHI-AC-Ctrl/releases) src directory in your MHI-AC-Ctrl sub-directory. You could also use the recently updated version in the [src folder](src) but with the risk that it is more unstable. The stability of the program is better when you compile it for a CPU frequency of 160MHz.
+Board | Build environment | Notes
+------|-------------------|------
+WeMos D1 mini (ESP8266) | `d1_mini` | 160 MHz (better stability), USB upload
+WeMos D1 mini, over the air | `d1_mini_ota` | set `upload_port` in `platformio.ini` to the device name / IP
+WeMos LOLIN S3 mini (ESP32-S3) | `lolin_s3_mini` | native USB; press RST after uploading if the board does not start
+
+```
+pio run -e lolin_s3_mini              # build
+pio run -e lolin_s3_mini -t upload    # build and flash via USB
+pio device monitor                    # serial log, 115200 baud
+pio run                               # build all environments
+```
+(Use `python -m platformio` instead of `pio` if the `pio` command is not on your PATH.)
+
+Optional build-time settings (MQTT defaults, setup AP password, OTA password, pins, ...) go into `secrets.ini`: copy [secrets.ini.example](secrets.ini.example) to `secrets.ini`, it is ignored by git.
+The SPI pins default to GPIO 14 / 13 / 12 (SCK / MOSI / MISO) on both boards and can be changed per board in `platformio.ini`.
+
+### First start: WiFi and MQTT setup
+1. After flashing, the device opens the WiFi access point **`MHI-AC-Ctrl-Setup`** (default password `mhi-ac-setup`, change it with `SETUP_AP_PASSWORD` in `secrets.ini`).
+2. Connect with a phone or laptop; the setup page opens automatically (otherwise browse to http://192.168.4.1/).
+3. **Configure WiFi**: select your network, enter the password and optionally the MQTT broker, then **Save**.
+4. Once connected, the same settings page is available on the home network at `http://<device IP>/` (the IP is shown in the serial log and on your router). Use **Setup** to change the MQTT broker later.
+
+Settings are stored in flash and survive reboots and firmware updates. When the WiFi is offline for 5 minutes, the setup access point opens again.
+Details: [SW-Configuration.md](SW-Configuration.md#wifi-setup-access-point).
+
+### Status LED
+LOLIN S3 mini (RGB LED) | D1 mini (blue LED) | Meaning
+------------------------|--------------------|--------
+yellow | fast blink | connecting to WiFi
+blue, blinking | slow blink | setup access point is open
+orange | double blink | WiFi OK, MQTT broker not reachable
+red | steady on | MQTT OK, but no data from the AC
+dim green | short flash every 3 s | everything OK
+
 The configuration options are described in [SW-Configuration.md](SW-Configuration.md).
 
 In a previous version (see [here](https://github.com/absalom-muc/MHI-AC-SPY)) I used the Hardware-SPI of the ESP8266. But since the SPI documentation of ESP8266 is poor, I decided to switch to a Software based SPI.
@@ -76,6 +121,6 @@ This project is licensed under the MIT License - see the LICENSE.md file for det
 
 # Acknowledgments
 The coding of the [SPI protocol](https://github.com/absalom-muc/MHI-AC-Trace/blob/main/SPI.md) of the AC is a nightmare. Without [rjdekker's MHI2MQTT](https://github.com/rjdekker/MHI2MQTT) I had no chance to understand the protocol! Unfortunately rjdekker is no longer active on GitHub. He used an Arduino plus an ESP8266 for his project.
-Also thank you very much on the authors and contributors of [MQTT client](https://github.com/knolleary/pubsubclient), [ArduinoOTA](https://github.com/esp8266/Arduino/tree/master/libraries/ArduinoOTA), [OneWire](https://www.pjrc.com/teensy/td_libs_OneWire.html) and [DallasTemperature](https://github.com/milesburton/Arduino-Temperature-Control-Library) libraries.
+Also thank you very much on the authors and contributors of [MQTT client](https://github.com/knolleary/pubsubclient), [WiFiManager](https://github.com/tzapu/WiFiManager), [ArduinoOTA](https://github.com/esp8266/Arduino/tree/master/libraries/ArduinoOTA), [OneWire](https://www.pjrc.com/teensy/td_libs_OneWire.html) and [DallasTemperature](https://github.com/milesburton/Arduino-Temperature-Control-Library) libraries.
 
 Last but not least thank you for the implementation of MHI-AC-Ctrl in [different environments](https://github.com/absalom-muc/MHI-AC-Ctrl/blob/master/SW-Configuration.md#integration-examples) (FHEM, Tasmota, Home Assistant etc.)
