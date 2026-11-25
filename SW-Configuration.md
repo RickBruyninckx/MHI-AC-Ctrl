@@ -328,11 +328,11 @@ The AC now keeps running and no control is possible anymore when MQTT is disconn
 ## MHI-AC-Ctrl partitioning
 MHI-AC-Ctrl-core implements the core functions (SPI read/write, communication with the wrapper).
 Wifi, MQTT, OTA and DS18x20 stuff is located in `support.h` and `support.cpp`.
-`MHI-AC-Ctrl.ino` and `MHI-AC-Ctrl.h` contain the wrapper for `MHI-AC-Ctrl-core.cpp` and `support.cpp`.
+`main.cpp` and `MHI-AC-Ctrl.h` contain the wrapper for `MHI-AC-Ctrl-core.cpp` and `support.cpp`.
 
 ### `MHI-AC-Ctrl-core.h` and `MHI-AC-Ctrl-core.cpp`
 Usually it should be not touched, only configured via [MHI-AC-Ctrl-core.h](src/MHI-AC-Ctrl-core.h).
-AC status information change will trigger the callback function `cbiStatusFunction` located in [MHI-AC-Ctrl.ino](src/MHI-AC-Ctrl.ino)
+AC status information change will trigger the callback function `cbiStatusFunction` located in [main.cpp](src/main.cpp)
 It is controlled via the functions:
 ```cpp
 void init();                          // initialization called once after boot
@@ -382,7 +382,7 @@ The error operating data will be read upon a request via this function.
 Provides the interface between MHI-AC-Ctrl and the user interfaces.
 It contains helper functions for serving WiFi, MQTT, OTA and the external temperature sensor DS18x20.
 
-### `MHI-AC-Ctrl.h` and `MHI-AC-Ctrl.ino`
+### `MHI-AC-Ctrl.h` and `main.cpp`
 This is the wrapper for MHI-AC-Ctrl-core and support.
 It provides beside the standard `setup()` and `loop()` functions the following two functions.
 
@@ -391,7 +391,7 @@ This is a member of the class `StatusHandler : public CallbackInterface_Status`.
 
 #### `void MQTT_subscribe_callback(char* topic, byte* payload, unsigned int length)`
 This function is called for incoming MQTT messages, the message is analyzed and translated to function calls.
-From systematic point of view this function should actually be located in [support.h](src/support.h) but in order to keep it simple it resides in [MHI-AC-Ctrl.ino](src/MHI-AC-Ctrl.ino).
+From systematic point of view this function should actually be located in [support.h](src/support.h) but in order to keep it simple it resides in [main.cpp](src/main.cpp).
 
 # Integration examples
 You find here some examples for integration of MHI-AC-Ctrl
