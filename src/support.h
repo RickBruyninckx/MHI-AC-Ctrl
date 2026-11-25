@@ -3,10 +3,10 @@
 #include "MHI-AC-Ctrl-core.h"
 #include "MHI-AC-Ctrl.h"
 
-#define VERSION "2.8"
+#define VERSION "2.9"
 
 #ifndef HOSTNAME
-#define HOSTNAME "MHI-AC-Ctrl"
+#define HOSTNAME "MHI-AC-Ctrl"                      // default hostname, can be changed on the settings page
 #endif
 
 // MQTT defaults, used until settings are saved via the WiFi setup page
@@ -25,15 +25,18 @@
 #ifndef MQTT_RETRY_INTERVAL_S
 #define MQTT_RETRY_INTERVAL_S 10                    // seconds between MQTT connect attempts while the broker is unreachable
 #endif
-#define MQTT_PREFIX HOSTNAME "/"                    // basic prefix used for publishing AC data (e.g. for status),
-                                                    // replace "/" by e.g. "/Living-Room/" when you have multiple ACs
-#define MQTT_SET_PREFIX MQTT_PREFIX "set/"          // prefix for subscribing set commands, must end with a "/"
-#define MQTT_OP_PREFIX MQTT_PREFIX "OpData/"        // prefix for publishing operating data, must end with a "/"
-#define MQTT_ERR_OP_PREFIX MQTT_PREFIX "ErrOpData/" // prefix for publishing operating data from last error, must end with a "/"
+// MQTT topics: "<hostname>/<topic>", set commands "<hostname>/set/<topic>",
+// operating data "<hostname>/OpData/<topic>", "<hostname>/ErrOpData/<topic>" (see wifi_config.h)
 
-#define OTA_HOSTNAME HOSTNAME                       // default for the OTA_HOSTNAME is the HOSTNAME
+#ifndef HA_DISCOVERY
+#define HA_DISCOVERY 1                              // publish Home Assistant MQTT discovery config (climate entity + sensors)
+#endif
+#ifndef HA_DISCOVERY_PREFIX
+#define HA_DISCOVERY_PREFIX "homeassistant"
+#endif
+
 #ifndef OTA_PASSWORD
-#define OTA_PASSWORD ""                             // Enter an OTA password if required
+#define OTA_PASSWORD ""                             // "" = use the device password (see wifi_config.h)
 #endif
 
 #define TEMP_MEASURE_PERIOD 0                       // period in seconds for temperature measurement with the external DS18x20 temperature sensor
@@ -48,15 +51,18 @@
 #define ROOM_TEMP_MQTT_SET_TIMEOUT  40              // time in seconds, after this time w/o receiving a valid room temperature
                                                     // via MQTT fallback to IU temperature sensor value
 
-//#define POWERON_WHEN_CHANGING_MODE true           // uncomment it to switch on the AC when the mode (heat, cool, dry etc.) is changed
-                                                    // used e.g. for home assistant support
+#ifndef POWERON_WHEN_CHANGING_MODE
+#define POWERON_WHEN_CHANGING_MODE 1                // 1: setting a mode switches the AC on, Mode "Off" switches it off and is
+#endif                                              // published as Mode when the AC is off (needed for Home Assistant). 0 to disable
 
 #define TROOM_FILTER_LIMIT 0.25                     // Defines from which Troom delta value a new Troom value is pubslised. Resolution 0.25°C.
                                                     // With a smaller resolution, Troom could toggle more. So deactivate the filter use 0.
 //#define ENHANCED_RESOLUTION true                    // when using Tsetpoint with x.5 degrees, airco will use (x+1).0 setpoint
                                                     // uncomment this to compensatie (offset) Troom for this.
                                                     // this will simulate .x degrees resolution
-//#define CONTINUE_WITHOUT_MQTT true                  // uncomment if communication with AC has to continue when MQTT or WiFi connection is disconnected.
+#ifndef CONTINUE_WITHOUT_MQTT
+#define CONTINUE_WITHOUT_MQTT 1                     // 1: communication with AC continues when MQTT or WiFi connection is disconnected. 0 to disable
+#endif
                                                     // When Troom is supplied from external, it will fallback to AC internal Troom temperature sensor
                                                     // When ROOM_TEMP_DS18X20 is used, it will use room temperature from DS18x20
 //#define USE_EXTENDED_FRAME_SIZE true                // uncomment if you want to use de extended frame size (33) which is used by the WF-RAC module
@@ -87,6 +93,8 @@
 
 extern PubSubClient MQTTclient;
 extern int WIFI_lost;
+extern unsigned long lastAcFrameMillis;                       // millis() of the last valid frame from the AC
+extern bool acFrameSeen;                                      // at least one valid frame received
 
 #include "wifi_config.h"
 
