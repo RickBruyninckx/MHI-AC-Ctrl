@@ -10,17 +10,28 @@
 
 MHI_AC_Ctrl_Core mhi_ac_ctrl_core;
 
+unsigned long lastAcFrameMillis = 0;   // millis() of the last valid frame from the AC
+bool acFrameSeen = false;              // at least one valid frame received
+
 POWER_STATUS power_status = unknown;
 
 unsigned long room_temp_set_timeout_Millis = millis();
 bool troom_was_set_by_MQTT = false;
 bool troom_was_set_by_DS18X20 = false;
 
-void MQTT_subscribe_callback(const char* topic, byte* payload, unsigned int length) {
-  payload[length] = 0;  // we need a string
-  Serial.printf_P(PSTR("MQTT_subscribe_callback, topic=%s payload=%s payload_length=%i\n"), topic, (char*)payload, length);
-#ifndef POWERON_WHEN_CHANGING_MODE
-  if (strcmp_P(topic, PSTR(MQTT_SET_PREFIX TOPIC_POWER)) == 0) {
+void MQTT_subscribe_callback(const char* topic, byte* rawPayload, unsigned int length) {
+  char payload[64];                                     // commands are short; copy to get a terminated string
+  size_t n = length < sizeof(payload) ? length : sizeof(payload) - 1;
+  memcpy(payload, rawPayload, n);
+  payload[n] = 0;
+  Serial.printf_P(PSTR("MQTT_subscribe_callback, topic=%s payload=%s payload_length=%u\n"), topic, payload, length);
+
+  size_t setPrefixLen = strlen(mqttSetPrefix());
+  if (strncmp(topic, mqttSetPrefix(), setPrefixLen) != 0)
+    return;
+  const char* cmd = topic + setPrefixLen;              // e.g. "Power" for "<hostname>/set/Power"
+
+  if (strcmp_P(cmd, PSTR(TOPIC_POWER)) == 0) {
     if (strcmp_P((char*)payload, PSTR(PAYLOAD_POWER_ON)) == 0) {
       mhi_ac_ctrl_core.set_power(power_on);
       publish_cmd_ok();
@@ -32,10 +43,8 @@ void MQTT_subscribe_callback(const char* topic, byte* payload, unsigned int leng
     else
       publish_cmd_invalidparameter();
   }
-  else 
-#endif
-  if (strcmp_P(topic, PSTR(MQTT_SET_PREFIX TOPIC_MODE)) == 0) {
-#ifdef POWERON_WHEN_CHANGING_MODE
+  else if (strcmp_P(cmd, PSTR(TOPIC_MODE)) == 0) {
+#if POWERON_WHEN_CHANGING_MODE
     if (strcmp_P((char*)payload, PSTR(PAYLOAD_POWER_OFF)) == 0) {
       mhi_ac_ctrl_core.set_power(power_off);
       publish_cmd_ok();
@@ -43,35 +52,35 @@ void MQTT_subscribe_callback(const char* topic, byte* payload, unsigned int leng
 #endif
       if (strcmp_P((char*)payload, PSTR(PAYLOAD_MODE_AUTO)) == 0) {
         mhi_ac_ctrl_core.set_mode(mode_auto);
-#ifdef POWERON_WHEN_CHANGING_MODE
+#if POWERON_WHEN_CHANGING_MODE
         mhi_ac_ctrl_core.set_power(power_on);
 #endif
         publish_cmd_ok();
       }
       else if (strcmp_P((char*)payload, PSTR(PAYLOAD_MODE_DRY)) == 0) {
         mhi_ac_ctrl_core.set_mode(mode_dry);
-#ifdef POWERON_WHEN_CHANGING_MODE
+#if POWERON_WHEN_CHANGING_MODE
         mhi_ac_ctrl_core.set_power(power_on);
 #endif
         publish_cmd_ok();
       }
       else if (strcmp_P((char*)payload, PSTR(PAYLOAD_MODE_COOL)) == 0) {
         mhi_ac_ctrl_core.set_mode(mode_cool);
-#ifdef POWERON_WHEN_CHANGING_MODE
+#if POWERON_WHEN_CHANGING_MODE
         mhi_ac_ctrl_core.set_power(power_on);
 #endif
         publish_cmd_ok();
       }
       else if (strcmp_P((char*)payload, PSTR(PAYLOAD_MODE_FAN)) == 0) {
         mhi_ac_ctrl_core.set_mode(mode_fan);
-#ifdef POWERON_WHEN_CHANGING_MODE
+#if POWERON_WHEN_CHANGING_MODE
         mhi_ac_ctrl_core.set_power(power_on);
 #endif
         publish_cmd_ok();
       }
       else if (strcmp_P((char*)payload, PSTR(PAYLOAD_MODE_HEAT)) == 0) {
         mhi_ac_ctrl_core.set_mode(mode_heat);
-#ifdef POWERON_WHEN_CHANGING_MODE
+#if POWERON_WHEN_CHANGING_MODE
         mhi_ac_ctrl_core.set_power(power_on);
 #endif
         publish_cmd_ok();
@@ -79,14 +88,14 @@ void MQTT_subscribe_callback(const char* topic, byte* payload, unsigned int leng
       else
         publish_cmd_invalidparameter();
   }
-  else if (strcmp_P(topic, PSTR(MQTT_SET_PREFIX TOPIC_TSETPOINT)) == 0) {
+  else if (strcmp_P(cmd, PSTR(TOPIC_TSETPOINT)) == 0) {
     float f=atof((char*)payload);
     if((f >= 18) & (f <= 30))
       mhi_ac_ctrl_core.set_tsetpoint((byte)(2 * f));
     else
       publish_cmd_invalidparameter();
   }
-  else if (strcmp_P(topic, PSTR(MQTT_SET_PREFIX TOPIC_FAN)) == 0) {
+  else if (strcmp_P(cmd, PSTR(TOPIC_FAN)) == 0) {
     if (strcmp_P((char*)payload, PAYLOAD_FAN_AUTO) == 0){
       mhi_ac_ctrl_core.set_fan(7);
       publish_cmd_ok();
@@ -110,7 +119,7 @@ void MQTT_subscribe_callback(const char* topic, byte* payload, unsigned int leng
     else
       publish_cmd_invalidparameter();
   }
-  else if (strcmp_P(topic, PSTR(MQTT_SET_PREFIX TOPIC_VANES)) == 0) {
+  else if (strcmp_P(cmd, PSTR(TOPIC_VANES)) == 0) {
     if (strcmp_P((char*)payload, PSTR(PAYLOAD_VANES_SWING)) == 0) {
       mhi_ac_ctrl_core.set_vanes(vanes_swing);
       publish_cmd_ok();
@@ -125,7 +134,7 @@ void MQTT_subscribe_callback(const char* topic, byte* payload, unsigned int leng
     }
   }
 #ifdef USE_EXTENDED_FRAME_SIZE  
-  else if (strcmp_P(topic, PSTR(MQTT_SET_PREFIX TOPIC_VANESLR)) == 0) {
+  else if (strcmp_P(cmd, PSTR(TOPIC_VANESLR)) == 0) {
     if (strcmp_P((char*)payload, PSTR(PAYLOAD_VANESLR_SWING)) == 0) {
       mhi_ac_ctrl_core.set_vanesLR(vanesLR_swing);
       publish_cmd_ok();
@@ -139,7 +148,7 @@ void MQTT_subscribe_callback(const char* topic, byte* payload, unsigned int leng
         publish_cmd_invalidparameter();
     }
   }
-  else if (strcmp_P(topic, PSTR(MQTT_SET_PREFIX TOPIC_3DAUTO)) == 0) {
+  else if (strcmp_P(cmd, PSTR(TOPIC_3DAUTO)) == 0) {
     if (strcmp_P((char*)payload, PSTR(PAYLOAD_3DAUTO_ON)) == 0) {
       mhi_ac_ctrl_core.set_3Dauto(Dauto_on);
       publish_cmd_ok();
@@ -152,7 +161,7 @@ void MQTT_subscribe_callback(const char* topic, byte* payload, unsigned int leng
       publish_cmd_invalidparameter();
   }
 #endif
-  else if (strcmp_P(topic, PSTR(MQTT_SET_PREFIX TOPIC_TROOM)) == 0) {
+  else if (strcmp_P(cmd, PSTR(TOPIC_TROOM)) == 0) {
     float f=atof((char*)payload);
 #ifdef ENHANCED_RESOLUTION
     f = f + mhi_ac_ctrl_core.get_troom_offset() ;  // increase Troom with current offset to compensate higher setpoint
@@ -168,11 +177,11 @@ void MQTT_subscribe_callback(const char* topic, byte* payload, unsigned int leng
     else
       publish_cmd_invalidparameter();
   }
-  else if (strcmp_P(topic, PSTR(MQTT_SET_PREFIX TOPIC_REQUEST_ERROPDATA)) == 0) {
+  else if (strcmp_P(cmd, PSTR(TOPIC_REQUEST_ERROPDATA)) == 0) {
     mhi_ac_ctrl_core.request_ErrOpData();
     publish_cmd_ok();
   }
-  else if (strcmp_P(topic, PSTR(MQTT_SET_PREFIX TOPIC_REQUEST_RESET)) == 0) {
+  else if (strcmp_P(cmd, PSTR(TOPIC_REQUEST_RESET)) == 0) {
     if (strcmp_P((char*)payload, PSTR(PAYLOAD_REQUEST_RESET)) == 0) {
       publish_cmd_ok();
       delay(500);
@@ -181,7 +190,7 @@ void MQTT_subscribe_callback(const char* topic, byte* payload, unsigned int leng
     else
       publish_cmd_invalidparameter();
   }
-  else if (strcmp_P(topic, PSTR(MQTT_SET_PREFIX TOPIC_REQUEST_PASSIVEMODE)) == 0) {
+  else if (strcmp_P(cmd, PSTR(TOPIC_REQUEST_PASSIVEMODE)) == 0) {
     if (strcmp_P((char*)payload, PSTR(PAYLOAD_REQUEST_PASSIVEMODE_ON)) == 0) {
       mhi_ac_ctrl_core.set_passive_mode(true);
     }
@@ -198,7 +207,7 @@ class StatusHandler : public CallbackInterface_Status {
   public:
     void cbiStatusFunction(ACStatus status, int value) {
       char strtmp[10];
-#ifdef POWERON_WHEN_CHANGING_MODE
+#if POWERON_WHEN_CHANGING_MODE
       static int mode_tmp = 0xff;
 #endif
 #ifdef ENHANCED_RESOLUTION      
@@ -226,22 +235,23 @@ class StatusHandler : public CallbackInterface_Status {
           if (value == power_on){
             output_P(status, (TOPIC_POWER), PSTR(PAYLOAD_POWER_ON));
             power_status = on;
-#ifdef POWERON_WHEN_CHANGING_MODE
+#if POWERON_WHEN_CHANGING_MODE
             cbiStatusFunction(status_mode, mode_tmp);
 #endif
           }
           else {
             output_P(status, (TOPIC_POWER), (PAYLOAD_POWER_OFF));
             power_status = off;
-#ifdef POWERON_WHEN_CHANGING_MODE
+#if POWERON_WHEN_CHANGING_MODE
             output_P(status, PSTR(TOPIC_MODE), PSTR(PAYLOAD_MODE_OFF));
 #endif
           }
           break;
         case status_mode:
-#ifdef POWERON_WHEN_CHANGING_MODE        
+#if POWERON_WHEN_CHANGING_MODE
           mode_tmp = value;
-#endif          
+#endif
+          [[fallthrough]];
         case opdata_mode:
         case erropdata_mode:
           switch (value) {
@@ -348,7 +358,8 @@ class StatusHandler : public CallbackInterface_Status {
           offset = round(tmp_value) - tmp_value;  // Calculate offset when setpoint is changed
           Serial.printf("status_tsetpoint: Set Troom offset: %f\n", offset);
           mhi_ac_ctrl_core.set_troom_offset(offset);
-#endif          
+#endif
+          [[fallthrough]];
         case opdata_tsetpoint:
         case erropdata_tsetpoint:
           dtostrf((value & 0x7f)/ 2.0, 0, 1, strtmp);
@@ -446,6 +457,8 @@ class StatusHandler : public CallbackInterface_Status {
           itoa(value, strtmp, 10);
           output_P(status, PSTR(TOPIC_OU_EEV1), strtmp);
           break;
+        default:
+          break;
       }
     }
 };
@@ -456,11 +469,13 @@ void setup() {
 #if defined(ESP32) && ARDUINO_USB_CDC_ON_BOOT
   // native USB: give the host up to 5s to (re)open the port, otherwise the boot log is lost
   for (unsigned long t = millis(); !Serial && millis() - t < 5000;) delay(10);
+  // never block on log output when no serial monitor is attached (default: wait per write)
+  Serial.setTxTimeoutMs(0);
 #endif
   delay(100);
   Serial.println();
   Serial.println(F("Starting MHI-AC-Ctrl v" VERSION));
-  Serial.printf_P(PSTR("CPU frequency[Hz]=%lu\n"), F_CPU);
+  Serial.printf_P(PSTR("CPU frequency[Hz]=%lu\n"), (unsigned long)F_CPU);
 #if defined(ESP32)
   Serial.printf("ESP.getCoreVersion()=%s\n", ESP.getCoreVersion());
   Serial.printf("ESP.getSdkVersion()=%s\n", ESP.getSdkVersion());
@@ -489,10 +504,10 @@ void setup() {
 
 
 void loop() {
+#if TEMP_MEASURE_PERIOD > 0
   static byte ds18x20_value_old = 0;
+#endif
   static int MQTTStatus = MQTT_NOT_CONNECTED;
-  static unsigned long lastAcFrameMillis = 0;
-  static bool acFrameSeen = false;
 
   bool wifiOk = wifiConfigLoop();
   if (wifiOk) {   // handles setup AP / reconnect, true when WiFi is connected
@@ -544,18 +559,27 @@ void loop() {
     troom_was_set_by_MQTT=false;
   }
 
-#ifndef CONTINUE_WITHOUT_MQTT 
+#if !CONTINUE_WITHOUT_MQTT 
   if((MQTTStatus==MQTT_RECONNECTED) || (MQTTStatus==MQTT_CONNECT_OK)){
 #endif    
     //Serial.println("MQTT connected in main loop");
     int ret = mhi_ac_ctrl_core.loop(80);
-    if (ret < 0)
-      Serial.printf_P(PSTR("mhi_ac_ctrl_core.loop error: %i\n"), ret);
+    if (ret < 0) {
+      // without an AC this fails on every loop: log at most every 10 s
+      static unsigned long lastErrLogMillis = 0;
+      static unsigned int errCount = 0;
+      errCount++;
+      if (millis() - lastErrLogMillis >= 10000) {
+        Serial.printf_P(PSTR("mhi_ac_ctrl_core.loop error: %i (%u errors in the last 10 s)\n"), ret, errCount);
+        lastErrLogMillis = millis();
+        errCount = 0;
+      }
+    }
     else {
       lastAcFrameMillis = millis();
       acFrameSeen = true;
     }
-#ifndef CONTINUE_WITHOUT_MQTT
+#if !CONTINUE_WITHOUT_MQTT
   }
 #endif
 
@@ -564,8 +588,8 @@ void loop() {
   bool acOk = acFrameSeen && (millis() - lastAcFrameMillis < 5000);
   if (wifiConfigPortalActive())  statusLedSet(LED_SETUP_AP);
   else if (!wifiOk)              statusLedSet(LED_CONNECTING);
-  else if (!mqttOk)              statusLedSet(LED_NO_MQTT);
   else if (!acOk)                statusLedSet(LED_NO_AC);
+  else if (!mqttOk)              statusLedSet(LED_NO_MQTT);
   else                           statusLedSet(LED_OK);
   statusLedLoop();
 
