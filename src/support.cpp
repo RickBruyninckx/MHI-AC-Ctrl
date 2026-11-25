@@ -63,12 +63,21 @@ void MeasureFrequency() {  // measure the frequency on the pins
 int MQTTreconnect() {
   char strtmp[50];
   static int reconnect_trials=0;
-  //Serial.printf("MQTTreconnect(): (MQTTclient.state=%i), WiFi.status()=%i networksFound=%i ...\n", MQTTclient.state(), WiFi.status(), networksFound);
+  static unsigned long lastAttemptMillis = 0;
+  static bool firstAttempt = true;
   if(!MQTTclient.connected()) {
-    Serial.printf("MQTTreconnect(): Attempting MQTT connection (MQTTclient.state=%i), WiFi.status()=%i ...\n", MQTTclient.state(), WiFi.status());  // state(), see https://pubsubclient.knolleary.net/api#state
-    if(reconnect_trials++>9){                                                                                                                       // WiFi.status()=3=connected, see https://realglitch.com/2018/07/arduino-wifi-status-codes/
-      Serial.printf("MQTTreconnect(): reconnect_trials=%i\n", reconnect_trials);
-      WiFi.disconnect(); // work around for https://github.com/esp8266/Arduino/issues/7432
+    // a failed connect blocks for a few seconds, so don't retry on every loop
+    // (keeps the settings page, OTA and WiFi handling responsive without a broker)
+    if (!firstAttempt && millis() - lastAttemptMillis < MQTT_RETRY_INTERVAL_S * 1000UL)
+      return MQTT_NOT_CONNECTED;
+    firstAttempt = false;
+    lastAttemptMillis = millis();
+    Serial.printf("MQTTreconnect(): Attempting MQTT connection to %s:%u (MQTTclient.state=%i), WiFi.status()=%i ...\n", mqttConfig.server, mqttConfig.port, MQTTclient.state(), WiFi.status());  // state(), see https://pubsubclient.knolleary.net/api#state
+    if(reconnect_trials++>9){
+      // the original code dropped WiFi here (work around for https://github.com/esp8266/Arduino/issues/7432);
+      // only reset the TCP socket instead, so a missing/broken broker never takes WiFi down
+      Serial.printf("MQTTreconnect(): reconnect_trials=%i, resetting MQTT socket\n", reconnect_trials);
+      espClient.stop();
       reconnect_trials=0;
     }
 

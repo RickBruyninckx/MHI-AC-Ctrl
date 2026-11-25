@@ -22,6 +22,9 @@
 #ifndef MQTT_PASSWORD
 #define MQTT_PASSWORD ""                            // if authentication is not used, leave it empty
 #endif
+#ifndef MQTT_RETRY_INTERVAL_S
+#define MQTT_RETRY_INTERVAL_S 10                    // seconds between MQTT connect attempts while the broker is unreachable
+#endif
 #define MQTT_PREFIX HOSTNAME "/"                    // basic prefix used for publishing AC data (e.g. for status),
                                                     // replace "/" by e.g. "/Living-Room/" when you have multiple ACs
 #define MQTT_SET_PREFIX MQTT_PREFIX "set/"          // prefix for subscribing set commands, must end with a "/"

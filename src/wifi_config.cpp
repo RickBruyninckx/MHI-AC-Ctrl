@@ -162,8 +162,8 @@ bool wifiConfigLoop() {
         wm.stopWebPortal();                        // setup AP brings its own web server
       startPortal(F("WiFi offline for too long"));
     } else if (wm.getWiFiIsSaved() && millis() - lastRetryMillis >= 30UL * 1000UL) {
-      // don't rely on the SDK auto-reconnect: it is disabled after an explicit
-      // WiFi.disconnect() (e.g. by the MQTT reconnect workaround)
+      // don't rely on the SDK auto-reconnect alone: it gives up after an
+      // explicit WiFi.disconnect() and some disconnect reasons
       Serial.println(F("WiFi offline, retrying saved network"));
       WiFi.begin();
       lastRetryMillis = millis();
