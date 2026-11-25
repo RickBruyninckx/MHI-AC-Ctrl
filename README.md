@@ -87,7 +87,8 @@ pio run                               # build all environments
 (Use `python -m platformio` instead of `pio` if the `pio` command is not on your PATH.)
 
 Optional build-time settings (MQTT defaults, setup AP password, OTA password, pins, ...) go into `secrets.ini`: copy [secrets.ini.example](secrets.ini.example) to `secrets.ini`, it is ignored by git.
-The SPI pins default to GPIO 14 / 13 / 12 (SCK / MOSI / MISO) on both boards and can be changed per board in `platformio.ini`.
+The SPI pins (SCK / MOSI / MISO) are GPIO 14 / 13 / 12 on the D1 mini and GPIO 12 / 11 / 13 on the LOLIN S3 mini, i.e. the same header positions on the MHI-AC-Ctrl PCB (see [Hardware.md](Hardware.md#using-a-wemos-lolin-s3-mini-esp32-s3)). They can be changed per board in `platformio.ini`.
+:warning: On the LOLIN S3 mini, don't connect USB while the board is powered by the AC (no protection diode on VBUS).
 
 ### First start: WiFi and MQTT setup
 1. After flashing, the device opens the WiFi access point **`MHI-AC-Ctrl-Setup`** (default password `mhi-ac-setup`, change it with `SETUP_AP_PASSWORD` in `secrets.ini`).

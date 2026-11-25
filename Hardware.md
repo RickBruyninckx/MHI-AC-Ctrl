@@ -60,7 +60,22 @@ The JST connector provides +12V. The DC-DC converter [TSR 1-2450](https://www.tr
 
 ## Signal Connection
 The ESP8266 SPI signals SCL (SPI clock), MOSI (Master Out Slave In) and MISO (Master In Slave Out) are connected via a voltage level shifter 5V <-> 3.3V with the AC. Direct connection of the signals without a level shifter could damage your ESP8266!
-The ESP32-S3 (WeMos LOLIN S3 mini) uses the same GPIO numbers 14 / 13 / 12 by default. Note: the LOLIN S3 mini has the D1 mini form factor, but it has not been verified that the D1 mini header positions used by the MHI-AC-Ctrl PCB carry GPIO 14 / 13 / 12 on the S3 mini. Check the pinout before plugging it in, and adapt the pins in `platformio.ini` if needed.
+### Using a WeMos LOLIN S3 mini (ESP32-S3)
+The LOLIN S3 mini has the D1 mini form factor: its two **outer** header rows sit at the D1 mini positions, the two inner rows are additional pins not used by the MHI-AC-Ctrl PCB. The same header positions carry different GPIOs, which the `lolin_s3_mini` build environment already uses (source: [LOLIN S3 mini pinout and schematic v1.0.0](https://www.wemos.cc/en/latest/s3/s3_mini.html)):
+
+D1 mini position | MHI-AC-Ctrl signal | D1 mini (ESP8266) | LOLIN S3 mini
+-----------------|--------------------|-------------------|--------------
+D5 | SCK | GPIO14 | GPIO12
+D6 | MISO | GPIO12 | GPIO13
+D7 | MOSI | GPIO13 | GPIO11
+D2 | DS18x20 DQ | GPIO4 | GPIO35
+5V | supply from the DC-DC converter | 5V | VBUS
+G | ground | GND | GND
+
+:warning: **Don't connect USB while the board is powered by the AC.** On the LOLIN S3 mini the USB-C VBUS is connected directly to the header VBUS pin (no diode as on the D1 mini), so the PC's 5V and the 5V of the DC-DC converter would be shorted together. Flash via USB with the board removed from the PCB, or use OTA.
+
+Before the first use, check with a multimeter (continuity mode, everything unpowered) that the level-shifter outputs for SCK / MOSI / MISO on the PCB reach S3 mini pins 12 / 11 / 13.
+After plugging it in, the boot log should report `SCK frequency` > 3000 Hz.
 
 In an early version I used a resistor voltage divider, but since the SPI of the AC has high impedance outputs, a voltage level shifter seems to be better. The voltage level shifters are bi-directional. That means the according ESP8266 pins (SCL, MOSI, MISO) could be inputs or outputs.
 

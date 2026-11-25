@@ -332,12 +332,13 @@ Warning: be aware that there might be some safety implication and that the deact
 The AC now keeps running and no control is possible anymore when MQTT is disconnected. Also of course no MQTT topics are updated anymore. Of course control is still possible with the remote control.
 
 ## SPI pins
-The AC is connected to GPIO 14 (SCK), 13 (MOSI) and 12 (MISO), defined in [MHI-AC-Ctrl-core.h](src/MHI-AC-Ctrl-core.h). They can be overridden per board with build flags, see the `lolin_s3_mini` environment in [platformio.ini](platformio.ini):
+The AC is connected to GPIO 14 (SCK), 13 (MOSI) and 12 (MISO), defined in [MHI-AC-Ctrl-core.h](src/MHI-AC-Ctrl-core.h). They can be overridden per board with build flags. The `lolin_s3_mini` environment in [platformio.ini](platformio.ini) uses the GPIOs at the same header positions of the MHI-AC-Ctrl PCB (see [Hardware.md](Hardware.md#using-a-wemos-lolin-s3-mini-esp32-s3)):
 ```ini
 build_flags =
-    -DSCK_PIN=14
-    -DMOSI_PIN=13
-    -DMISO_PIN=12
+    -DSCK_PIN=12
+    -DMOSI_PIN=11
+    -DMISO_PIN=13
+    -DONE_WIRE_BUS=35
 ```
 
 ## Status LED ([status_led.h](src/status_led.h))
