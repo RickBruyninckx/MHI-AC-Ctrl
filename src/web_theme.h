@@ -1,0 +1,43 @@
+#pragma once
+// Dark theme for the WiFiManager setup / settings pages.
+// Injected after WiFiManager's own stylesheet, so these rules override it.
+// Deliberately NOT PROGMEM: WiFiManager appends it as a plain C string.
+
+static const char WEB_THEME[] =
+"<meta name='theme-color' content='#0f141a'>"
+"<meta name='color-scheme' content='dark'>"
+"<style>"
+":root{--bg:#0f141a;--card:#18202a;--line:#2a3440;--text:#e6edf3;--muted:#8b98a5;"
+"--accent:#38bdf8;--accent2:#0ea5e9;--ok:#4ade80;--err:#f87171;--field:#0b1016}"
+"html,body,body.invert{background:var(--bg);color:var(--text);margin:0}"
+"body,.c{font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;text-align:center}"
+".wrap{background:var(--card);border:1px solid var(--line);border-radius:14px;"
+"padding:20px 22px 24px;margin:24px 16px;box-shadow:0 10px 30px rgba(0,0,0,.35);"
+"box-sizing:border-box;min-width:0;width:calc(100% - 32px);max-width:440px}"
+"h1,body.invert h1{font-size:1.5rem;margin:.2em 0 .1em;color:var(--text);background:none;letter-spacing:.3px}"
+"h1:before{content:'\\2744\\FE0E';color:var(--accent);margin-right:.4em}"
+"h3{font-weight:500;color:var(--muted);font-size:.95rem;margin:.2em 0 1.2em}"
+"hr{border:0;border-top:1px solid var(--line);margin:18px 0}"
+"label{color:var(--muted);font-size:.85rem;display:inline-block;margin-top:6px}"
+"input,select,button{font-family:inherit}"
+"input,select{background:var(--field);color:var(--text);border:1px solid var(--line);"
+"border-radius:9px;padding:10px 12px;outline:none;transition:border-color .15s,box-shadow .15s}"
+"input:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(56,189,248,.25)}"
+"input::placeholder{color:#55606c}"
+"input[type=checkbox],input[type=radio]{accent-color:var(--accent);width:auto}"
+"button,input[type=button],input[type=submit]{background:linear-gradient(180deg,var(--accent),var(--accent2));"
+"color:#04121c;font-weight:600;border-radius:10px;font-size:1.05rem;line-height:2.6rem;"
+"box-shadow:0 2px 0 rgba(0,0,0,.25)}"
+"button:hover{filter:brightness(1.08)}"
+"button.D{background:linear-gradient(180deg,#f87171,#dc2626);color:#fff}"
+"a,body.invert a{color:var(--accent);background:none;font-weight:600}"
+"a:hover{color:#7dd3fc}"
+"div:has(>a[data-ssid]){background:var(--field);border:1px solid var(--line);border-radius:9px;"
+"padding:9px 12px;margin:6px 0;text-align:left}"
+"div:has(>a[data-ssid]):hover{border-color:var(--accent)}"
+".msg,body.invert .msg{background:var(--field);color:var(--text);border:1px solid var(--line);"
+"border-left:4px solid var(--muted);border-radius:9px}"
+".msg.P{border-left-color:var(--accent)}.msg.S{border-left-color:var(--ok)}.msg.D{border-left-color:var(--err)}"
+"table{width:100%;border-collapse:collapse}td,th{padding:6px 4px;border-bottom:1px solid var(--line);text-align:left}"
+"dt{color:var(--muted);font-weight:500;font-size:.85rem}dd{margin-bottom:.6em}"
+"</style>";

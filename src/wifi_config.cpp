@@ -1,5 +1,6 @@
 #include "support.h"
 #include "wifi_config.h"
+#include "web_theme.h"
 #include <WiFiManager.h>   // https://github.com/tzapu/WiFiManager
 #include <EEPROM.h>
 
@@ -48,7 +49,7 @@ static void saveMqttConfig() {
 
 static WiFiManager wm;
 static char portStr[6];
-static WiFiManagerParameter paramHeader("<hr><h3>MQTT broker</h3>");
+static WiFiManagerParameter paramHeader("<h3>MQTT broker</h3>");
 static WiFiManagerParameter *paramServer;
 static WiFiManagerParameter *paramPort;
 static WiFiManagerParameter *paramUser;
@@ -96,6 +97,8 @@ void wifiConfigBegin() {
   wm.addParameter(paramPassword);
 
   wm.setTitle(HOSTNAME);
+  wm.setDarkMode(true);                            // also inverts the WiFi signal icons
+  wm.setCustomHeadElement(WEB_THEME);
   wm.setHostname(HOSTNAME);
   wm.setConfigPortalBlocking(false);
   wm.setBreakAfterConfig(true);                    // run the save callback even if the WiFi connect fails
