@@ -4,18 +4,25 @@
 #include "web_status.h"
 #include <WiFiManager.h>   // https://github.com/tzapu/WiFiManager
 #include <EEPROM.h>
+#if defined(ESP32)
+#include <mbedtls/md.h>
+#else
+#include <bearssl/bearssl_hmac.h>
+#endif
 
 // ---------- persisted settings ----------
 
 #define CFG_MAGIC_V1 0x4D514331UL     // "MQC1": MqttConfig only
 #define CFG_MAGIC_V2 0x4D514332UL     // "MQC2": MqttConfig + hostname + device password
+#define CFG_MAGIC_V3 0x4D514333UL     // "MQC3": V2 + flag "password set on the settings page"
 #define CFG_EEPROM_SIZE 256
 
 struct StoredConfig {
   uint32_t magic;
   MqttConfig mqtt;                    // same offset as in V1, so V1 data can be migrated
-  char hostname[32];
-  char password[32];
+  char hostname[32];                  // V2+
+  char password[32];                  // V2+
+  uint8_t passwordUserSet;            // V3+: 1 = set on the settings page, takes priority
 };
 static_assert(sizeof(StoredConfig) <= CFG_EEPROM_SIZE, "EEPROM area too small");
 
@@ -23,11 +30,14 @@ MqttConfig mqttConfig;
 static char hostname[32];
 static char password[32];
 static char devId[7];
+static char chipId[13];               // STA MAC address, 12 hex digits
+static bool passwordUserSet = false;
 static char prefix[40], setPrefix[44], opPrefix[48], errOpPrefix[52];
 
 const char* deviceHostname() { return hostname; }
 const char* devicePassword() { return password; }
 const char* deviceId() { return devId; }
+const char* deviceChipId() { return chipId; }
 const char* mqttPrefix() { return prefix; }
 const char* mqttSetPrefix() { return setPrefix; }
 const char* mqttOpPrefix() { return opPrefix; }
@@ -41,16 +51,43 @@ static bool validHostname(const char* h) {
   return h[0] != '-' && h[n - 1] != '-';
 }
 
+static const char PW_CHARS[] = "abcdefghjkmnpqrstuvwxyz23456789";   // no 0/O, 1/l/i
+
 static void randomPassword(char* out, size_t len) {
-  static const char chars[] = "abcdefghjkmnpqrstuvwxyz23456789";   // no 0/O, 1/l/i
+  const char* chars = PW_CHARS;
   for (size_t i = 0; i < len - 1; i++) {
 #if defined(ESP32)
     uint32_t r = esp_random();
 #else
     uint32_t r = ESP.random();
 #endif
-    out[i] = chars[r % (sizeof(chars) - 1)];
+    out[i] = chars[r % (sizeof(PW_CHARS) - 1)];
   }
+  out[len - 1] = 0;
+}
+
+// Device password derived from the chip ID and DEVICE_SECRET:
+//   HMAC-SHA256(key = DEVICE_SECRET, message = "MHI-AC-Ctrl:" + chip ID),
+//   first 10 bytes mapped to the password alphabet.
+// tools/device_password.py computes the same value on a PC.
+static void derivedPassword(char* out, size_t len) {
+  String msg = String("MHI-AC-Ctrl:") + chipId;
+  const char* key = DEVICE_SECRET;
+  uint8_t mac[32];
+#if defined(ESP32)
+  mbedtls_md_hmac(mbedtls_md_info_from_type(MBEDTLS_MD_SHA256),
+                  (const unsigned char*)key, strlen(key),
+                  (const unsigned char*)msg.c_str(), msg.length(), mac);
+#else
+  br_hmac_key_context kc;
+  br_hmac_context ctx;
+  br_hmac_key_init(&kc, &br_sha256_vtable, key, strlen(key));
+  br_hmac_init(&ctx, &kc, 0);
+  br_hmac_update(&ctx, msg.c_str(), msg.length());
+  br_hmac_out(&ctx, mac);
+#endif
+  for (size_t i = 0; i < len - 1; i++)
+    out[i] = PW_CHARS[mac[i] % (sizeof(PW_CHARS) - 1)];
   out[len - 1] = 0;
 }
 
@@ -64,10 +101,11 @@ static void buildPrefixes() {
 static void saveConfig() {
   StoredConfig stored;
   memset(&stored, 0, sizeof(stored));
-  stored.magic = CFG_MAGIC_V2;
+  stored.magic = CFG_MAGIC_V3;
   stored.mqtt = mqttConfig;
   strlcpy(stored.hostname, hostname, sizeof(stored.hostname));
   strlcpy(stored.password, password, sizeof(stored.password));
+  stored.passwordUserSet = passwordUserSet ? 1 : 0;
   EEPROM.put(0, stored);
   EEPROM.commit();
   Serial.printf_P(PSTR("Settings saved: hostname=%s MQTT %s:%u user=%s\n"), hostname, mqttConfig.server, mqttConfig.port, mqttConfig.user);
@@ -76,16 +114,23 @@ static void saveConfig() {
 static void loadConfig() {
 #if defined(ESP32)
   snprintf(devId, sizeof(devId), "%06lx", (unsigned long)((ESP.getEfuseMac() >> 24) & 0xFFFFFF));
+  uint64_t mac = ESP.getEfuseMac();                 // base MAC = WiFi station MAC, byte 0 in the lowest bits
+  uint8_t m[6];
+  for (int i = 0; i < 6; i++) m[i] = (mac >> (8 * i)) & 0xFF;
 #else
   snprintf(devId, sizeof(devId), "%06lx", (unsigned long)(ESP.getChipId() & 0xFFFFFF));
+  uint8_t m[6];
+  WiFi.macAddress(m);
 #endif
+  snprintf(chipId, sizeof(chipId), "%02X%02X%02X%02X%02X%02X", m[0], m[1], m[2], m[3], m[4], m[5]);
 
   StoredConfig stored;
   EEPROM.begin(CFG_EEPROM_SIZE);
   EEPROM.get(0, stored);
   bool dirty = false;
 
-  if (stored.magic == CFG_MAGIC_V1 || stored.magic == CFG_MAGIC_V2) {
+  bool v2plus = stored.magic == CFG_MAGIC_V2 || stored.magic == CFG_MAGIC_V3;
+  if (stored.magic == CFG_MAGIC_V1 || v2plus) {
     mqttConfig = stored.mqtt;
     mqttConfig.server[sizeof(mqttConfig.server) - 1] = 0;   // guard against garbage
     mqttConfig.user[sizeof(mqttConfig.user) - 1] = 0;
@@ -100,33 +145,50 @@ static void loadConfig() {
     dirty = true;
   }
 
-  if (stored.magic == CFG_MAGIC_V2) {
+  if (v2plus) {
     stored.hostname[sizeof(stored.hostname) - 1] = 0;
     stored.password[sizeof(stored.password) - 1] = 0;
   }
-  if (stored.magic == CFG_MAGIC_V2 && validHostname(stored.hostname)) {
+  if (stored.magic != CFG_MAGIC_V3) {
+    stored.passwordUserSet = 0;                     // V2 passwords were random or DEVICE_PASSWORD
+    dirty = true;
+  }
+  if (v2plus && validHostname(stored.hostname)) {
     strlcpy(hostname, stored.hostname, sizeof(hostname));
   } else {
     strlcpy(hostname, HOSTNAME, sizeof(hostname));
     dirty = true;
   }
-  if (stored.magic == CFG_MAGIC_V2 && strlen(stored.password) >= 8) {
+  // device password, first match wins:
+  //   1. set on the settings page   2. DEVICE_PASSWORD   3. derived from DEVICE_SECRET + chip ID
+  //   4. previously stored (random) 5. new random password
+  const char* source;
+  bool storedOk = v2plus && strlen(stored.password) >= 8;
+  if (storedOk && stored.passwordUserSet) {
     strlcpy(password, stored.password, sizeof(password));
+    passwordUserSet = true;
+    source = "set on the settings page";
   } else if (strlen(DEVICE_PASSWORD) >= 8) {
     strlcpy(password, DEVICE_PASSWORD, sizeof(password));
-    dirty = true;
+    source = "DEVICE_PASSWORD";
+  } else if (strlen(DEVICE_SECRET) > 0) {
+    derivedPassword(password, 11);
+    source = "derived from DEVICE_SECRET and chip ID";
+  } else if (storedOk) {
+    strlcpy(password, stored.password, sizeof(password));
+    source = "random, stored";
   } else {
     randomPassword(password, 11);
-    Serial.println(F("Generated a new random device password"));
-    dirty = true;
+    source = "random, newly generated";
   }
+  if (!storedOk || strcmp(password, stored.password) != 0) dirty = true;
   if (dirty) saveConfig();
 
   buildPrefixes();
-  Serial.printf_P(PSTR("Hostname: %s, device id: %s, MQTT topics: %s...\n"), hostname, devId, prefix);
+  Serial.printf_P(PSTR("Hostname: %s, chip ID: %s, MQTT topics: %s...\n"), hostname, chipId, prefix);
   // printed on purpose: the serial port needs physical access, and this is how
   // the user learns a generated password
-  Serial.printf_P(PSTR("Device password (setup AP, settings login '" WEB_LOGIN_USER "', OTA): %s\n"), password);
+  Serial.printf_P(PSTR("Device password (setup AP, settings login '" WEB_LOGIN_USER "', OTA): %s (%s)\n"), password, source);
 }
 
 // ---------- WiFiManager ----------
@@ -168,6 +230,7 @@ static void onSaveParams() {
   if (strlen(newPw) > 0) {
     if (strlen(newPw) >= 8 && strlen(newPw) < sizeof(password)) {
       strlcpy(password, newPw, sizeof(password));
+      passwordUserSet = true;
       restart = true;
     } else {
       Serial.println(F("Device password ignored: 8..31 characters required"));

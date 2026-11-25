@@ -61,6 +61,7 @@ String webStatusPage() {
   html += F("<h3>Device</h3><table>");
   row(html, F("Firmware"), F("MHI-AC-Ctrl " VERSION));
   row(html, F("Uptime"), uptime());
+  row(html, F("Chip ID"), deviceChipId());
   row(html, F("WiFi"), WiFi.SSID() + " (" + String(WiFi.RSSI()) + " dBm)");
   row(html, F("IP address"), WiFi.localIP().toString());
   row(html, F("MQTT broker"), String(mqttConfig.server) + ":" + String(mqttConfig.port) +

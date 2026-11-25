@@ -2,6 +2,7 @@ MHI-AC-Ctrl by absalom-muc
 
 **v2.9** ([RickBruyninckx/MHI-AC-Ctrl](https://github.com/RickBruyninckx/MHI-AC-Ctrl), November 2026)
 - Security: settings page on the home network requires a login (user `admin`); per-device password (random on first boot or `DEVICE_PASSWORD`) for setup AP, login and OTA; firmware upload via the web page disabled; OTA always password protected
+- Per-board device password derived from `DEVICE_SECRET` and the chip ID (HMAC-SHA256), with `tools/device_password.py` to compute it on a PC; chip ID shown on the status page
 - Hostname editable on the settings page; MQTT topic root follows the hostname
 - AC status page (`/status`), works without MQTT
 - Home Assistant MQTT discovery (climate entity + sensors)

@@ -95,7 +95,7 @@ The SPI pins (SCK / MOSI / MISO) are GPIO 14 / 13 / 12 on the D1 mini and GPIO 1
 :warning: On the LOLIN S3 mini, don't connect USB while the board is powered by the AC (no protection diode on VBUS).
 
 ### First start: WiFi and MQTT setup
-1. **Device password**: on first boot the device generates a random password and prints it in the serial log at every boot (`Device password (...)`). Alternatively set your own with `DEVICE_PASSWORD` in `secrets.ini`. It is used for the setup access point, the settings login and OTA.
+1. **Device password** (setup access point, settings login and OTA): set a `DEVICE_SECRET` in `secrets.ini` and every board gets its own password, derived from that secret and its chip ID (= WiFi MAC address, also shown in your router). Compute it on your PC with `python tools/device_password.py <chip id>`. Without a secret the device generates a random password on first boot. Either way it is printed in the serial log at every boot (`Device password (...)`).
 2. The device opens the WiFi access point **`MHI-AC-Ctrl-Setup`**; connect with a phone or laptop using the device password. The setup page opens automatically (otherwise browse to http://192.168.4.1/).
 3. **Configure WiFi**: select your network, enter the WiFi password and optionally the MQTT broker, then **Save**.
 4. Once connected, the settings page is available on the home network at `http://<device IP>/` (IP in the serial log and on your router). Log in with user **`admin`** and the device password. **AC status** shows the AC values, **Setup** changes the MQTT broker, hostname and device password.

@@ -9,8 +9,9 @@
 //   stored in flash. On the home network it requires a login (user "admin",
 //   device password); on the setup AP the AP password protects it.
 // - the device password is also the setup AP password and the OTA password.
-//   Default: DEVICE_PASSWORD if set at build time, otherwise a random password
-//   generated on first boot and printed in the serial log at every boot.
+//   First match wins: set on the settings page, DEVICE_PASSWORD, derived from
+//   DEVICE_SECRET + chip ID, stored random password, new random password.
+//   It is printed in the serial log at every boot.
 
 #include <Arduino.h>
 
@@ -21,6 +22,9 @@
 #define DEVICE_PASSWORD ""                         // "" = random password generated on first boot
 #endif
 #endif
+#ifndef DEVICE_SECRET
+#define DEVICE_SECRET ""                           // set (in secrets.ini) to derive the password from the chip ID:
+#endif                                             // HMAC-SHA256(DEVICE_SECRET, "MHI-AC-Ctrl:" + chip ID), see tools/device_password.py
 #ifndef SETUP_AP_AFTER_OFFLINE_MIN
 #define SETUP_AP_AFTER_OFFLINE_MIN 5               // minutes without WiFi before the setup AP is started
 #endif
@@ -42,6 +46,7 @@ bool wifiConfigPortalActive();                     // true while the setup AP is
 const char* deviceHostname();                      // WiFi / OTA / MQTT client name, MQTT topic root
 const char* devicePassword();                      // setup AP, settings page login, OTA
 const char* deviceId();                            // 6 hex digits, unique per chip
+const char* deviceChipId();                        // WiFi station MAC address, 12 hex digits
 
 // MQTT topic prefixes, derived from the hostname: "<hostname>/", "<hostname>/set/", ...
 const char* mqttPrefix();

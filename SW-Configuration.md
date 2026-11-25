@@ -24,8 +24,20 @@ WiFi credentials are not compiled into the firmware. They are entered on a setup
 
 ### Device password
 One password protects the setup access point, the settings login and OTA updates.
-- Default: a random 10-character password generated on first boot, stored in flash and printed in the serial log at every boot (`Device password (...)`).
-- Set it at build time with `DEVICE_PASSWORD` (min. 8 characters), or change it on the settings page (**Setup** -> *New device password*). The device restarts after a change.
+The first matching source is used:
+1. a password set on the settings page (**Setup** -> *New device password*, the device restarts),
+2. `DEVICE_PASSWORD` (min. 8 characters, the same for every board),
+3. derived from `DEVICE_SECRET` and the chip ID (recommended),
+4. a random password generated on first boot and stored in flash.
+
+The password and its source are printed in the serial log at every boot (`Device password (...)`).
+
+**Derived password**: `HMAC-SHA256(key = DEVICE_SECRET, message = "MHI-AC-Ctrl:" + chip ID)`, mapped to 10 characters. The chip ID is the WiFi MAC address of the board as 12 hex digits (serial log, AC status page, router device list). Every board gets its own password, it survives a flash erase, and it cannot be calculated from the MAC address (which the setup access point broadcasts) without the secret. Compute it on a PC:
+```
+python tools/device_password.py 90:DA:72:74:52:90           # reads DEVICE_SECRET from secrets.ini
+python tools/device_password.py 90DA72745290 --secret "..."
+```
+Keep a backup of `DEVICE_SECRET`; `secrets.ini` is not stored in git.
 - `OTA_PASSWORD` can still be set to use a different password for OTA only.
 
 Firmware upload via the web page (`/update`) is disabled; use OTA (`d1_mini_ota` environment with `upload_flags = --auth=<device password>`) or USB.
