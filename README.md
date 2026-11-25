@@ -111,8 +111,8 @@ LOLIN S3 mini (RGB LED) | D1 mini (blue LED) | Meaning
 ------------------------|--------------------|--------
 yellow | fast blink | connecting to WiFi
 blue, blinking | slow blink | setup access point is open
-orange | double blink | WiFi OK, MQTT broker not reachable
-red | steady on | MQTT OK, but no data from the AC
+red | steady on | WiFi OK, but no data from the AC (not connected or wiring problem)
+orange | double blink | AC OK, but MQTT broker not reachable
 dim green | short flash every 3 s | everything OK
 
 The configuration options are described in [SW-Configuration.md](SW-Configuration.md).

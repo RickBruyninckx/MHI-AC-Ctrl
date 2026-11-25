@@ -359,8 +359,8 @@ LOLIN S3 mini (RGB LED, GPIO47) | D1 mini (blue LED, GPIO2) | Meaning
 --------------------------------|---------------------------|--------
 yellow | fast blink | connecting to WiFi
 blue, blinking | slow blink | setup access point is open
-orange | double blink | WiFi OK, MQTT broker not reachable
-red | steady on | MQTT OK, but no valid frame from the AC for 5 s
+red | steady on | WiFi OK, but no valid frame from the AC for 5 s
+orange | double blink | AC OK, but MQTT broker not reachable
 dim green | short flash every 3 s | everything OK
 
 ```cpp
